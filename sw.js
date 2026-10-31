@@ -1,6 +1,6 @@
 /* Guarda os arquivos do app pra abrir mesmo sem internet. A previsão sempre vem da rede. */
-const CACHE = 'pico-certo-v2';
-const ARQUIVOS = ['./', './index.html', './app.js', './picos.js', './manifest.webmanifest', './icon.svg', './icon-192.png', './icon-512.png'];
+const CACHE = 'pico-certo-v3';
+const ARQUIVOS = ['./', './index.html', './app.js', './picos.js', './manifest.webmanifest', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(ARQUIVOS)));

@@ -17,7 +17,7 @@ Com a localização da pessoa, ele:
 | `index.html` | A tela e o visual |
 | `app.js` | A lógica: busca de dados, nota, mapa e navegação |
 | `picos.js` | A lista de picos. Dá pra editar e acrescentar |
-| `manifest.webmanifest`, `sw.js`, `icon-*.png`, `icon.svg` | O que faz ele virar "app" no celular |
+| `manifest.webmanifest`, `sw.js`, `icon-*.png` | O que faz ele virar "app" no celular (ícone feito a partir da logo em `../marca/logo-gemini.png`) |
 
 ## Testar no computador
 

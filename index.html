@@ -7,7 +7,7 @@
 <meta name="description" content="Previsão de surf pela sua localização: o melhor pico e o melhor horário pra cair.">
 <meta name="theme-color" content="#0f3b52">
 <link rel="manifest" href="manifest.webmanifest">
-<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="icon" href="icon-192.png" type="image/png">
 <link rel="apple-touch-icon" href="icon-192.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Pico Certo">
@@ -105,7 +105,7 @@ h1, h2, h3, h4 { text-wrap: balance; }
 /* topo */
 .topo { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .marca { margin: 0; display: flex; align-items: center; gap: 8px; font: 700 26px/1 var(--display); text-transform: uppercase; letter-spacing: 0.02em; }
-.marca svg { width: 30px; height: 30px; flex: 0 0 auto; }
+.marca img { width: 32px; height: 32px; flex: 0 0 auto; border-radius: 8px; }
 .local {
   display: inline-flex; align-items: center; gap: 6px; min-width: 0; max-width: 62%;
   border: 1px solid var(--line); background: var(--surface); color: var(--ink);
@@ -511,7 +511,7 @@ button.linha:hover { border-color: var(--muted); }
 <div class="app">
   <header class="topo">
     <h1 class="marca">
-      <svg viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="14" fill="#0f3b52"/><circle cx="32" cy="23" r="8.5" fill="#f07a3e"/><path d="M8 36q6-7 12 0t12 0 12 0 12 0" fill="none" stroke="#fff" stroke-width="4.5" stroke-linecap="round"/><path d="M14 46q4.5-6 9 0t9 0 9 0 9 0" fill="none" stroke="#6da7ec" stroke-width="4.5" stroke-linecap="round"/></svg>
+      <img src="icon-192.png" alt="" width="32" height="32">
       Pico Certo
     </h1>
     <button type="button" class="local" data-trocar aria-label="Trocar local">
@@ -523,7 +523,7 @@ button.linha:hover { border-color: var(--muted); }
 </div>
 <div id="detalhe" class="painel" role="dialog" aria-modal="true" aria-label="Detalhes do pico" hidden></div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
-<script src="picos.js?v=202610311236"></script>
-<script src="app.js?v=202610311236"></script>
+<script src="picos.js?v=202610311246"></script>
+<script src="app.js?v=202610311246"></script>
 </body>
 </html>
