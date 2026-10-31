@@ -638,7 +638,7 @@ function faixaHoras(s, diaStr, j, compacta) {
 }
 
 function telaInicio() {
-  return comparacao() + categorias() + sugestaoMini()
+  return sugestaoMini() + comparacao() + categorias()
     + `<p class="rodape-mini">Previsão das ${new Date(S.geradoEm).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}${S.offline ? ' (sem internet, mostrando a última)' : ''} · <button type="button" data-atualizar>Atualizar</button></p>`;
 }
 
@@ -729,7 +729,7 @@ function sugestaoMini() {
   const p = top.s.pico, j = top.j, f = faixa(j.nota);
   const cond = condicoesDia(top.s, S.dias[S.dia]);
   return `<section class="sugestao-mini" aria-labelledby="sug-tit">
-    <p class="eyebrow" id="sug-tit">Melhor perto de você · ${rotuloDia(S.dias[S.dia], S.dia).toLowerCase()}</p>
+    <p class="eyebrow" id="sug-tit">Sugestão: melhor pico perto de você · ${rotuloDia(S.dias[S.dia], S.dia).toLowerCase()}</p>
     <button type="button" class="linha" data-abrir="${esc(p.id)}">
       <span class="ln-texto"><strong>${esc(p.nome)}</strong><span class="leve">${j.ini}h–${j.fim}h · ${fmtViagem(top.s.viagem)}${cond.raios.length ? ' · risco de trovoada' : ''}</span></span>
       <span class="pill pq ${f.cls}">${num(j.nota)}</span>
