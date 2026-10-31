@@ -39,6 +39,8 @@
   --tile-filter: none;
   --perigo: #c8372f;
   --alerta-bg: #fff0cc; --alerta-ink: #5c3b00; --alerta-icone: #e09a00;
+  /* vento no gráfico da semana: terral (bom), lateral, maral (ruim) */
+  --v-terral: #1baf7a; --v-lateral: #eda100; --v-maral: #e34948;
   --display: "Barlow Condensed", "Arial Narrow", system-ui, sans-serif;
   --body: "Barlow", system-ui, -apple-system, "Segoe UI", sans-serif;
   --radius: 14px;
@@ -58,6 +60,7 @@
     --tide: #6da7ec;
     --tile-filter: invert(1) hue-rotate(180deg) brightness(0.95) contrast(0.9);
     --alerta-bg: #3a2b08; --alerta-ink: #ffdc9c; --alerta-icone: #fab219;
+    --v-terral: #199e70; --v-lateral: #c98500; --v-maral: #e66767;
     color-scheme: dark;
   }
 }
@@ -74,6 +77,7 @@
   --tide: #6da7ec;
   --tile-filter: invert(1) hue-rotate(180deg) brightness(0.95) contrast(0.9);
   --alerta-bg: #3a2b08; --alerta-ink: #ffdc9c; --alerta-icone: #fab219;
+  --v-terral: #199e70; --v-lateral: #c98500; --v-maral: #e66767;
   color-scheme: dark;
 }
 
@@ -271,6 +275,39 @@ tr.sel td:first-child { box-shadow: inset 3px 0 0 var(--ink); font-weight: 700; 
 tbody tr { cursor: pointer; }
 
 #conteudo, .det-col { display: flex; flex-direction: column; gap: 18px; }
+
+/* gráfico da semana */
+.graf-semana { touch-action: pan-y; cursor: crosshair; }
+.graf .noite { fill: var(--wash); }
+.graf .dia-sel { fill: none; stroke: var(--ink); stroke-width: 1; stroke-opacity: 0.35; }
+.graf .grade-dia { stroke: var(--line); stroke-width: 1; }
+.graf .dia-rot.sel { fill: var(--ink); font-weight: 700; }
+.graf .sem-area { fill: var(--tide); opacity: 0.1; }
+.graf .sem-linha { fill: none; stroke: var(--tide); stroke-width: 2; stroke-linejoin: round; }
+.graf .sem-ponto { fill: var(--tide); stroke: var(--surface); stroke-width: 2; }
+.graf .sem-rot { fill: var(--ink); font: 700 11px var(--body); font-variant-numeric: tabular-nums; }
+.graf .sem-per { fill: var(--muted); font-weight: 500; }
+.graf .sem-tit { text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600; }
+.graf .sem-cursor { stroke: var(--ink); stroke-width: 1; }
+.graf .v-terral { fill: var(--v-terral); }
+.graf .v-lateral { fill: var(--v-lateral); }
+.graf .v-maral { fill: var(--v-maral); }
+.legenda { margin: 8px 0 2px; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; font-size: 13px; color: var(--ink-2); }
+.legenda .lg, .legenda .lg-linha { display: inline-block; flex: 0 0 auto; }
+.legenda .lg { width: 10px; height: 10px; border-radius: 2px; margin-left: 8px; }
+.legenda .lg-linha { width: 16px; height: 2px; background: var(--tide); border-radius: 1px; }
+.lg.v-terral { background: var(--v-terral); }
+.lg.v-lateral { background: var(--v-lateral); }
+.lg.v-maral { background: var(--v-maral); }
+
+/* chamar a galera, ações do pico e chave da comparação */
+.det-acoes { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.ico-chamar { width: 16px; height: 16px; fill: currentColor; }
+.acoes-cheias { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
+.acoes-cheias .btn-sec { justify-content: center; }
+.seg-largo { display: grid; grid-template-columns: 1fr 1fr; }
+.seg-largo button { text-align: center; }
+@media (max-width: 400px) { .acoes-cheias { grid-template-columns: 1fr; } }
 
 /* comparar picos (tela inicial) */
 .comparar { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; display: flex; flex-direction: column; gap: 12px; }
@@ -486,7 +523,7 @@ button.linha:hover { border-color: var(--muted); }
 </div>
 <div id="detalhe" class="painel" role="dialog" aria-modal="true" aria-label="Detalhes do pico" hidden></div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
-<script src="picos.js?v=202610311209"></script>
-<script src="app.js?v=202610311209"></script>
+<script src="picos.js?v=202610311231"></script>
+<script src="app.js?v=202610311231"></script>
 </body>
 </html>

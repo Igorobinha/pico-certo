@@ -29,6 +29,7 @@ const ICONE = {
   mapa: '<svg viewBox="0 0 32 32" aria-hidden="true"><path d="M4 8l7-3 10 3 7-3v19l-7 3-10-3-7 3z" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linejoin="round"/><path d="M11 5v19M21 8v19" stroke="currentColor" stroke-width="2.6"/></svg>',
   favoritos: '<svg viewBox="0 0 32 32" aria-hidden="true"><path d="M16 4l3.6 7.6 8.2 1-6 5.7 1.6 8.2L16 22.4l-7.4 4.1 1.6-8.2-6-5.7 8.2-1z" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linejoin="round"/></svg>',
   seguranca: '<svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="11.5" fill="none" stroke="currentColor" stroke-width="2.6"/><circle cx="16" cy="16" r="5" fill="none" stroke="currentColor" stroke-width="2.6"/><path d="M8 8l4.5 4.5M24 8l-4.5 4.5M8 24l4.5-4.5M24 24l-4.5-4.5" stroke="currentColor" stroke-width="2.6"/></svg>',
+  chamar: '<svg class="ico-chamar" viewBox="0 0 24 24" aria-hidden="true"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4" fill="none" stroke="currentColor" stroke-width="2"/></svg>',
   estrela: '<svg class="estrela" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.8l2.8 5.8 6.3.8-4.6 4.4 1.2 6.3L12 17l-5.7 3.1 1.2-6.3-4.6-4.4 6.3-.8z"/></svg>',
   ajustes: '<svg viewBox="0 0 32 32" aria-hidden="true"><path d="M5 9h14M25 9h2M5 16h4M15 16h12M5 23h10M21 23h6" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/><circle cx="22" cy="9" r="3" fill="none" stroke="currentColor" stroke-width="2.6"/><circle cx="12" cy="16" r="3" fill="none" stroke="currentColor" stroke-width="2.6"/><circle cx="18" cy="23" r="3" fill="none" stroke="currentColor" stroke-width="2.6"/></svg>',
 };
@@ -120,6 +121,7 @@ const S = {
   favoritos: store.get('favoritos', []),       // ids dos picos com estrela
   selecionados: store.get('selecionados', []), // picos marcados pra comparar na tela inicial
   diaComp: null, precisaRecarregar: false,
+  modoComp: store.get('modoComp', 'onda'),     // 'onda' = melhor onda; 'viagem' = onda descontando a estrada
   alertas: { ativo: false, notaMin: 7, hora: 19, ...store.get('alertas', {}) },  // aviso na véspera, às `hora`
   tela: 'inicio',
   msgLocal: '', localizando: false,
@@ -642,11 +644,14 @@ function telaInicio() {
 
 const veredito = nota => nota >= 6 ? 'Vale ir' : nota >= 4.5 ? 'Dá pra cair, sem esperar muito' : 'Melhor esperar outro dia';
 
-// os picos marcados no dia escolhido, do melhor pro pior (pela nota da onda; a viagem só desempata)
+// os picos marcados no dia escolhido, do melhor pro pior.
+// modo 'onda': só a nota da onda (a viagem desempata); modo 'viagem': nota descontando o tempo de estrada
 function rankingMarcados(dIdx) {
   const sel = new Set(S.selecionados);
-  return S.rk[dIdx].filter(r => sel.has(r.s.pico.id))
-    .sort((a, b) => ((b.j ? b.j.nota : -1) - (a.j ? a.j.nota : -1)) || (b.valor - a.valor));
+  const lista = S.rk[dIdx].filter(r => sel.has(r.s.pico.id));
+  return S.modoComp === 'viagem'
+    ? lista.sort((a, b) => b.valor - a.valor)
+    : lista.sort((a, b) => ((b.j ? b.j.nota : -1) - (a.j ? a.j.nota : -1)) || (b.valor - a.valor));
 }
 
 function comparacao() {
@@ -674,7 +679,7 @@ function comparacao() {
   } else {
     const s = top.s, p = s.pico, j = top.j, c = j.melhor.c, f = faixa(j.nota), cond = condicoesDia(s, diaStr);
     vencedor = `<div class="cmp-vencedor">
-      <p class="eyebrow">Melhor entre os marcados · ${rotuloDiaLongo(diaStr, dIdx)}</p>
+      <p class="eyebrow">${S.modoComp === 'viagem' ? 'Melhor contando a viagem' : 'Melhor onda entre os marcados'} · ${rotuloDiaLongo(diaStr, dIdx)}</p>
       <div class="cv-topo">
         <div class="cv-nome"><h3>${esc(p.nome)}</h3><p class="sub">${esc(localPico(p))} · ${fmtViagem(s.viagem)}</p></div>
         <div class="nota-media ${f.cls}" role="img" aria-label="Nota ${num(j.nota)} de 10, ${f.nome}"><span class="nm-num">${num(j.nota)}</span><span class="nm-rot">${f.nome}</span></div>
@@ -686,7 +691,11 @@ function comparacao() {
         ${cond.agua != null ? `<li><span class="leve">Água</span> ${graus(cond.agua)} · ${roupa(cond.agua).curta}</li>` : ''}
       </ul>
       ${alertaRaio(cond, dIdx === 0 ? 'hoje' : dIdx === 1 ? 'amanhã' : 'nesse dia')}
-      <button type="button" class="btn" data-abrir="${esc(p.id)}" data-no-dia="${dIdx}">Ver previsão e rota</button>
+      <div class="acoes acoes-cheias">
+        <button type="button" class="btn" data-abrir="${esc(p.id)}" data-no-dia="${dIdx}">Ver previsão e rota</button>
+        <button type="button" class="btn-sec" data-chamar="${esc(p.id)}" data-no-dia="${dIdx}">${ICONE.chamar}Chamar a galera</button>
+      </div>
+      <p class="aviso" id="msg-chamar-cmp" hidden></p>
     </div>`;
   }
   const outros = rk.slice(1).map((r, i) => {
@@ -701,6 +710,10 @@ function comparacao() {
     <div class="cmp-cab">
       <h2 class="secao-tit" id="cmp-tit">Comparar picos</h2>
       <button type="button" class="btn-sec" data-ir="comparar">Editar (${n})</button>
+    </div>
+    <div class="seg seg-largo" role="radiogroup" aria-label="Como comparar">
+      <button type="button" role="radio" aria-checked="${S.modoComp !== 'viagem'}" data-modo-comp="onda">Melhor onda</button>
+      <button type="button" role="radio" aria-checked="${S.modoComp === 'viagem'}" data-modo-comp="viagem">Onda + distância</button>
     </div>
     <div class="dias-mini" role="group" aria-label="Dia da comparação">${chips}</div>
     ${vencedor}
@@ -912,12 +925,38 @@ async function compartilharLocal() {
     const perto = S.series ? S.series.map(s => ({ p: s.pico, d: distKm({ lat, lon }, s.pico) })).sort((a, b) => a.d - b.d)[0] : null;
     const onde = perto && perto.d < 2 ? ` em ${perto.p.nome}` : '';
     const texto = `Estou surfando${onde}. Minha localização: https://www.openstreetmap.org/?mlat=${lat.toFixed(5)}&mlon=${lon.toFixed(5)}#map=17/${lat.toFixed(5)}/${lon.toFixed(5)}`;
-    if (NATIVO && typeof NATIVO.compartilhar === 'function') { NATIVO.compartilhar(texto); avisar('Escolha com quem compartilhar.'); return; }
-    if (navigator.share) { try { await navigator.share({ text: texto }); avisar('Localização compartilhada.'); return; } catch { /* cancelou */ } }
-    try { await navigator.clipboard.writeText(texto); avisar('Localização copiada. Cole numa conversa pra mandar.'); }
-    catch { avisar(texto); }
+    compartilharTexto(texto, avisar);
   }, err => avisar(err.code === 1 ? 'A localização está bloqueada. Libere nas permissões.' : 'Não consegui pegar sua localização. Tente de novo.'),
   { enableHighAccuracy: true, timeout: 20000, maximumAge: 30000 });
+}
+
+// abre o "compartilhar" do celular (WhatsApp, SMS…); sem ele, copia o texto
+async function compartilharTexto(texto, avisar) {
+  if (NATIVO && typeof NATIVO.compartilhar === 'function') { NATIVO.compartilhar(texto); avisar('Escolha com quem compartilhar.'); return; }
+  if (navigator.share) { try { await navigator.share({ text: texto }); avisar('Compartilhado.'); return; } catch { /* cancelou ou não deu */ } }
+  try { await navigator.clipboard.writeText(texto); avisar('Mensagem copiada. Cole no WhatsApp pra mandar.'); }
+  catch { avisar(texto); }
+}
+
+const URL_APP = 'https://igorobinha.github.io/pico-certo/';
+
+// "Bora? Itapuã amanhã das 6h às 9h, nota 7,2…": convite pros amigos com a previsão do pico
+function textoChamar(s, dIdx) {
+  const p = s.pico, diaStr = S.dias[dIdx];
+  const j = janela(s, diaStr, horaMinima(s, dIdx));
+  const quando = dIdx === 0 ? 'hoje' : dIdx === 1 ? 'amanhã' : rotuloDiaLongo(diaStr, dIdx).toLowerCase();
+  if (!j) return `Bora surfar? ${p.nome} ${quando} não tem janela boa, mas olha a previsão da semana no Pico Certo: ${URL_APP}`;
+  const c = j.melhor.c, cond = condicoesDia(s, diaStr);
+  const agua = cond.agua != null ? ` Água ${graus(cond.agua)}.` : '';
+  return `Bora? ${p.nome} ${quando} das ${j.ini}h às ${j.fim}h, nota ${num(j.nota)} (${faixa(j.nota).nome.toLowerCase()}). `
+    + `Onda ≈ ${faixaM(c.praia)}, vento ${rotuloVento(c)}.${agua} 🤙\nPrevisão no Pico Certo: ${URL_APP}`;
+}
+
+function chamarGalera(id, dIdx, msgId) {
+  const s = S.series && S.series.find(x => x.pico.id === id);
+  if (!s) return;
+  const msg = $('#' + msgId);
+  compartilharTexto(textoChamar(s, dIdx), t => { if (msg) { msg.hidden = false; msg.textContent = t; } });
 }
 
 function telaMapa() {
@@ -1051,12 +1090,14 @@ function renderDetalhe(completo) {
       <div class="det-topo"><button type="button" class="voltar" data-fechar>${ICONE.voltar}Voltar</button></div>
       <header class="det-cab">
         ${regiaoDe(p).nome !== p.nome ? `<p class="eyebrow">${esc(regiaoDe(p).nome)}</p>` : ''}
-        <div class="det-titulo">
-          <h2>${esc(p.nome)}</h2>
-          <button type="button" class="fav" data-favorito="${esc(p.id)}" aria-pressed="${ehFavorito(p.id)}">${ICONE.estrela}<span>${ehFavorito(p.id) ? 'Favorito' : 'Favoritar'}</span></button>
-        </div>
+        <h2>${esc(p.nome)}</h2>
         <p class="sub">${esc(regiaoDe(p).cidade)} · ${fmtViagem(s.viagem)} de carro</p>
         <p class="sub">Praia virada para ${dirPT(p.facing)}. Aqui, terral é vento de ${dirPT((p.facing + 180) % 360)}.</p>
+        <div class="det-acoes">
+          <button type="button" class="fav" data-favorito="${esc(p.id)}" aria-pressed="${ehFavorito(p.id)}">${ICONE.estrela}<span>${ehFavorito(p.id) ? 'Favorito' : 'Favoritar'}</span></button>
+          <button type="button" class="fav" data-chamar="${esc(p.id)}">${ICONE.chamar}<span>Chamar a galera</span></button>
+        </div>
+        <p class="aviso" id="msg-chamar-det" hidden></p>
       </header>
       <div id="det-previsao" class="det-col"></div>
       ${fichaPico(p)}
@@ -1127,6 +1168,12 @@ function renderPrevisaoDetalhe(s) {
   const rp = roupa(cond.agua);
   const quando = S.diaDet === 0 ? 'hoje' : S.diaDet === 1 ? 'amanhã' : 'nesse dia';
   el.innerHTML = `
+    <section class="bloco" aria-labelledby="s-tit">
+      <h3 class="secao-tit" id="s-tit">Semana <span class="leve">mar aberto</span></h3>
+      <p class="leitura" id="leitura-semana" aria-live="polite">Arraste o dedo no gráfico pra ver cada hora. Toque pra abrir aquele dia.</p>
+      ${graficoSemana(s, largura)}
+      <p class="legenda"><span class="lg-linha"></span>Ondulação <span class="lg v-terral"></span>Terral <span class="lg v-lateral"></span>Lateral <span class="lg v-maral"></span>Maral</p>
+    </section>
     <div class="dias" role="tablist" aria-label="Dia">${S.dias.map((d, i) => chipDia(d, i, jans[i] ? jans[i].nota : null, S.diaDet)).join('')}</div>
     <section class="bloco" aria-labelledby="c-tit">
       <h3 class="secao-tit" id="c-tit">Água, sol e tempo <span class="leve">${rotuloDiaLongo(diaStr, S.diaDet)}</span></h3>
@@ -1157,6 +1204,98 @@ function barPath(x, y, w, h, r) {
   if (h <= 0) return '';
   r = Math.min(r, w / 2, h);
   return `M${x.toFixed(1)},${(y + h).toFixed(1)}V${(y + r).toFixed(1)}Q${x.toFixed(1)},${y.toFixed(1)} ${(x + r).toFixed(1)},${y.toFixed(1)}H${(x + w - r).toFixed(1)}Q${(x + w).toFixed(1)},${y.toFixed(1)} ${(x + w).toFixed(1)},${(y + r).toFixed(1)}V${(y + h).toFixed(1)}Z`;
+}
+
+const tetoRedondo = (v, passo) => Math.max(passo, Math.ceil(v / passo) * passo);
+
+// 7 dias num gráfico só: em cima a ondulação (linha), embaixo o vento em blocos de 3 horas,
+// colorido por terral/lateral/maral pra este pico. Mesmo eixo de horas, cada painel com sua escala.
+function graficoSemana(s, W) {
+  const hs = s.horas, n = hs.length;
+  if (n < 24) return '<p class="leve">Sem dados da semana.</p>';
+  const pl = 34, pr = 6, pt = 22, h1 = 104, gap = 30, h2 = 56, pb = 4;
+  const base1 = pt + h1, topo2 = base1 + gap, base2 = topo2 + h2, H = base2 + pb;
+  const passo = (W - pl - pr) / n;
+  const x = i => pl + i * passo;
+  const alt = h => h.onda.alt ?? 0;
+  // folga em cima pros rótulos de cada dia não encostarem na linha; teto redondo (0,4/0,8/1,2 ou 1/2/3 m)
+  const bruto = Math.max(...hs.map(alt)) * 1.6;
+  const maxA = bruto <= 1.2 ? tetoRedondo(bruto, 0.4) : tetoRedondo(bruto, 1);
+  const y1 = v => base1 - (v / maxA) * h1;
+  let g = '';
+
+  // noites sombreadas e o dia aberto destacado
+  let ini = null;
+  hs.forEach((h, i) => {
+    if (!h.claro && ini == null) ini = i;
+    const fecha = h.claro ? i : (i === n - 1 ? n : null);
+    if (ini != null && fecha != null) { g += `<rect class="noite" x="${x(ini).toFixed(1)}" y="${pt}" width="${(x(fecha) - x(ini)).toFixed(1)}" height="${base2 - pt}"/>`; ini = null; }
+  });
+  S.dias.forEach((d, k) => {
+    const i0 = hs.findIndex(h => h.dia === d);
+    if (i0 < 0) return;
+    let i1 = i0;
+    while (i1 < n && hs[i1].dia === d) i1++;
+    if (k === S.diaDet) g += `<rect class="dia-sel" x="${x(i0).toFixed(1)}" y="${pt - 16}" width="${(x(i1) - x(i0)).toFixed(1)}" height="${base2 - pt + 16}" rx="4"/>`;
+    if (i0 > 0) g += `<line class="grade-dia" x1="${x(i0).toFixed(1)}" x2="${x(i0).toFixed(1)}" y1="${pt - 16}" y2="${base2}"/>`;
+    g += `<text class="eixo dia-rot${k === S.diaDet ? ' sel' : ''}" x="${((x(i0) + x(i1)) / 2).toFixed(1)}" y="${pt - 5}" text-anchor="middle">${rotuloDia(d, k)}</text>`;
+  });
+
+  // ondulação: grade, área, linha e o máximo de cada dia (altura e período)
+  for (const v of [maxA / 2, maxA]) {
+    g += `<line class="grade" x1="${pl}" x2="${W - pr}" y1="${y1(v).toFixed(1)}" y2="${y1(v).toFixed(1)}"/>`;
+    g += `<text class="eixo" x="${pl - 5}" y="${(y1(v) + 4).toFixed(1)}" text-anchor="end">${num(v, v % 1 ? 1 : 0)} m</text>`;
+  }
+  const pts = hs.map((h, i) => `${(x(i) + passo / 2).toFixed(1)},${y1(alt(h)).toFixed(1)}`);
+  g += `<path class="sem-area" d="M${pts.join('L')}L${(x(n - 1) + passo / 2).toFixed(1)},${base1}L${(x(0) + passo / 2).toFixed(1)},${base1}Z"/>`;
+  g += `<path class="sem-linha" d="M${pts.join('L')}"/>`;
+  g += `<line class="base" x1="${pl}" x2="${W - pr}" y1="${base1}" y2="${base1}"/>`;
+  // máximo de cada dia: ponto no lugar do pico, rótulo centrado na coluna do dia (nunca encavala com o vizinho)
+  for (const d of S.dias) {
+    let bi = -1, i0 = -1, i1 = -1;
+    hs.forEach((h, i) => {
+      if (h.dia !== d) return;
+      if (i0 < 0) i0 = i;
+      i1 = i + 1;
+      if (bi < 0 || alt(h) > alt(hs[bi])) bi = i;
+    });
+    if (bi < 0) continue;
+    const h = hs[bi], cx = ((x(i0) + x(i1)) / 2).toFixed(1);
+    g += `<circle class="sem-ponto" cx="${(x(bi) + passo / 2).toFixed(1)}" cy="${y1(alt(h)).toFixed(1)}" r="3.5"/>`;
+    g += `<text class="sem-rot" x="${cx}" y="${pt + 11}" text-anchor="middle">${num(alt(h))} m<tspan class="sem-per" x="${cx}" dy="10">${num(ondulacao(h).per, 0)} s</tspan></text>`;
+  }
+
+  // vento em blocos de 3 horas
+  const blocos = [];
+  for (let i = 0; i < n; i += 3) {
+    const grupo = hs.slice(i, i + 3).filter(h => h.vento != null);
+    if (!grupo.length) continue;
+    blocos.push({
+      i, k: grupo.length,
+      v: grupo.reduce((a, h) => a + h.vento, 0) / grupo.length,
+      q: grupo.reduce((a, h) => a + (h.c ? h.c.q : 0), 0) / grupo.length,
+    });
+  }
+  const maxV = tetoRedondo(Math.max(...blocos.map(b => b.v)), 10);
+  const y2 = v => base2 - (v / maxV) * h2;
+  g += `<text class="eixo sem-tit" x="${pl}" y="${topo2 - 9}">Vento</text>`;
+  g += `<line class="grade" x1="${pl}" x2="${W - pr}" y1="${y2(maxV)}" y2="${y2(maxV)}"/>`;
+  g += `<text class="eixo" x="${pl - 5}" y="${y2(maxV) + 4}" text-anchor="end">${maxV}</text>`;
+  g += `<text class="eixo" x="${pl - 5}" y="${base2 + 4}" text-anchor="end">0</text>`;
+  for (const b of blocos) {
+    const bx = x(b.i) + 1, bw = Math.max(1.5, b.k * passo - 2), topo = y2(b.v);
+    const cls = b.q > 0.25 ? 'v-terral' : b.q < -0.25 ? 'v-maral' : 'v-lateral';
+    g += `<path class="${cls}" d="${barPath(bx, topo, bw, base2 - topo, 2)}"/>`;
+  }
+  g += `<line class="base" x1="${pl}" x2="${W - pr}" y1="${base2}" y2="${base2}"/>`;
+  g += `<line id="sem-cursor" class="sem-cursor" x1="0" x2="0" y1="${pt - 16}" y2="${base2}" visibility="hidden"/>`;
+  return `<svg id="graf-semana" class="graf graf-semana" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" data-pl="${pl}" data-passo="${passo}" role="img" aria-label="Ondulação e vento dos próximos 7 dias">${g}</svg>`;
+}
+
+function leituraSemana(h) {
+  const o = ondulacao(h), k = S.dias.indexOf(h.dia);
+  return `<strong>${rotuloDiaLongo(h.dia, k)} · ${h.hora}h</strong>${h.claro ? ` · nota ${num(h.c.nota)}` : ' · noite'}<br>`
+    + `Ondulação ${num(o.alt)} m, ${num(o.per, 0)} s, ${dirPT(o.dir)} · vento ${num(h.vento, 0)} km/h ${dirPT(h.ventoDir)}, ${rotuloVento(h.c)}`;
 }
 
 function graficoNotas(s, claras, j, W) {
@@ -1632,6 +1771,12 @@ document.addEventListener('click', e => {
     agendarAlertas();
   }
   else if ('compartilhar' in d) compartilharLocal();
+  else if ('chamar' in d) {
+    // dentro do pico vale o dia que está aberto; na comparação, o dia escolhido lá
+    const noPico = !!t.closest('#detalhe');
+    chamarGalera(d.chamar, noPico ? S.diaDet : (d.noDia != null ? +d.noDia : S.dia), noPico ? 'msg-chamar-det' : 'msg-chamar-cmp');
+  }
+  else if ('modoComp' in d) { S.modoComp = d.modoComp; store.set('modoComp', S.modoComp); render(); }
   else if ('diaComp' in d) { S.diaComp = +d.diaComp; render(); }
   else if ('limparSelecao' in d) {
     S.selecionados = []; store.set('selecionados', S.selecionados);
@@ -1739,6 +1884,35 @@ document.addEventListener('pointerout', e => {
   const s = serieAberta(); if (!s) return;
   const h = s.horas.find(x => x.dia === S.dias[S.diaDet] && x.hora === S.horaSel);
   const el = $('#leitura'); if (el) el.innerHTML = leitura(h);
+});
+
+// gráfico da semana: arrastar mostra a hora; tocar abre aquele dia
+function horaNoGrafico(e) {
+  const svg = e.target.closest && e.target.closest('#graf-semana');
+  const s = svg && serieAberta();
+  if (!s) return null;
+  const pl = +svg.dataset.pl, passo = +svg.dataset.passo;
+  const i = clamp(Math.floor((e.clientX - svg.getBoundingClientRect().left - pl) / passo), 0, s.horas.length - 1);
+  return { svg, i, h: s.horas[i], pl, passo };
+}
+function mostrarHoraSemana(e) {
+  const a = horaNoGrafico(e);
+  if (!a) return;
+  const cur = a.svg.querySelector('#sem-cursor'), x = (a.pl + (a.i + 0.5) * a.passo).toFixed(1);
+  cur.setAttribute('x1', x); cur.setAttribute('x2', x); cur.setAttribute('visibility', 'visible');
+  const el = $('#leitura-semana'); if (el) el.innerHTML = leituraSemana(a.h);
+}
+document.addEventListener('pointermove', mostrarHoraSemana);
+document.addEventListener('pointerdown', mostrarHoraSemana);
+document.addEventListener('click', e => {
+  const a = horaNoGrafico(e);
+  if (!a) return;
+  const k = S.dias.indexOf(a.h.dia);
+  if (k < 0) return;
+  S.diaDet = k;
+  S.horaSel = a.h.claro ? a.h.hora : null;
+  renderPrevisaoDetalhe(serieAberta());
+  const el = $('#leitura-semana'); if (el) el.innerHTML = leituraSemana(a.h);
 });
 
 // o Android avisa aqui se a pessoa permitiu as notificações
