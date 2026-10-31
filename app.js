@@ -29,6 +29,7 @@ const ICONE = {
   mapa: '<svg viewBox="0 0 32 32" aria-hidden="true"><path d="M4 8l7-3 10 3 7-3v19l-7 3-10-3-7 3z" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linejoin="round"/><path d="M11 5v19M21 8v19" stroke="currentColor" stroke-width="2.6"/></svg>',
   favoritos: '<svg viewBox="0 0 32 32" aria-hidden="true"><path d="M16 4l3.6 7.6 8.2 1-6 5.7 1.6 8.2L16 22.4l-7.4 4.1 1.6-8.2-6-5.7 8.2-1z" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linejoin="round"/></svg>',
   seguranca: '<svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="11.5" fill="none" stroke="currentColor" stroke-width="2.6"/><circle cx="16" cy="16" r="5" fill="none" stroke="currentColor" stroke-width="2.6"/><path d="M8 8l4.5 4.5M24 8l-4.5 4.5M8 24l4.5-4.5M24 24l-4.5-4.5" stroke="currentColor" stroke-width="2.6"/></svg>',
+  diario: '<svg viewBox="0 0 32 32" aria-hidden="true"><path d="M8 4h15a3 3 0 0 1 3 3v21H11a3 3 0 0 1-3-3z" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linejoin="round"/><path d="M8 25a3 3 0 0 1 3-3h15M13 10h8M13 15h6" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></svg>',
   chamar: '<svg class="ico-chamar" viewBox="0 0 24 24" aria-hidden="true"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4" fill="none" stroke="currentColor" stroke-width="2"/></svg>',
   estrela: '<svg class="estrela" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.8l2.8 5.8 6.3.8-4.6 4.4 1.2 6.3L12 17l-5.7 3.1 1.2-6.3-4.6-4.4 6.3-.8z"/></svg>',
   ajustes: '<svg viewBox="0 0 32 32" aria-hidden="true"><path d="M5 9h14M25 9h2M5 16h4M15 16h12M5 23h10M21 23h6" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/><circle cx="22" cy="9" r="3" fill="none" stroke="currentColor" stroke-width="2.6"/><circle cx="12" cy="16" r="3" fill="none" stroke="currentColor" stroke-width="2.6"/><circle cx="18" cy="23" r="3" fill="none" stroke="currentColor" stroke-width="2.6"/></svg>',
@@ -123,6 +124,9 @@ const S = {
   diaComp: null, precisaRecarregar: false,
   modoComp: store.get('modoComp', 'onda'),     // 'onda' = melhor onda; 'viagem' = onda descontando a estrada
   alertas: { ativo: false, notaMin: 7, hora: 19, ...store.get('alertas', {}) },  // aviso na véspera, às `hora`
+  boletim: { ativo: false, hora: 5, ...store.get('boletim', {}) },            // boletim todo dia de manhã
+  diario: store.get('diario', []),             // sessões registradas: a mais nova primeiro
+  apagando: null,                              // sessão esperando confirmação pra apagar
   tela: 'inicio',
   msgLocal: '', localizando: false,
   carregando: false, erro: null, offline: false,
@@ -434,14 +438,63 @@ function montarAlertas() {
     lista.push({
       quando,
       titulo: comApelido('Amanhã vai ter onda'),
-      texto: `${m.s.pico.nome} das ${m.j.ini}h às ${m.j.fim}h, nota ${num(m.j.nota)} (${faixa(m.j.nota).nome.toLowerCase()}). Onda ≈ ${faixaM(c.praia)}, vento ${rotuloVento(c)}.`,
+      texto: `${m.s.pico.nome} das ${m.j.ini}h às ${m.j.fim}h, nota ${num(m.j.nota)} (${faixa(m.j.nota).nome.toLowerCase()}). Onda ≈ ${faixaM(c.praia)}, ${textoVento(c)}.`,
     });
   }
   return lista;
 }
+// boletim da manhã: todo dia no horário escolhido, o melhor pico do dia (favoritos ou perto).
+// Vale pros próximos 3 dias; depois disso a previsão guardada fica velha e chega um lembrete pra abrir o app.
+const DIAS_BOLETIM = 3;
+function montarBoletins() {
+  const fav = new Set(S.favoritos);
+  const lista = [];
+  const quandoNoDia = (i, off) => Date.parse(`${S.dias[i]}T00:00:00Z`) - off * 1000 + S.boletim.hora * 3600 * 1000;
+  const off = S.series && S.series[0] ? S.series[0].off : -10800;
+  let feitos = 0, ultimo = -1;
+  for (let i = 0; i < S.dias.length && feitos < DIAS_BOLETIM; i++) {
+    const quando = quandoNoDia(i, off);
+    if (quando <= Date.now()) continue;
+    feitos++;
+    ultimo = i;
+    const cands = S.rk[i].filter(r => r.j && (!fav.size || fav.has(r.s.pico.id)));
+    const m = fav.size ? cands.sort((a, b) => b.j.nota - a.j.nota)[0] : cands[0];
+    const titulo = comApelido('Bom dia');
+    if (!m) {
+      lista.push({ quando, titulo, texto: 'Hoje nenhum dos seus picos tem janela boa com luz do dia. Dia de descanso!' });
+      continue;
+    }
+    const c = m.j.melhor.c, f = faixa(m.j.nota);
+    const onda = `Onda ≈ ${faixaM(c.praia)}, ${textoVento(c)}.`;
+    const texto = m.j.nota >= 4.5
+      ? `Hoje o melhor é ${m.s.pico.nome} das ${m.j.ini}h às ${m.j.fim}h, nota ${num(m.j.nota)} (${f.nome.toLowerCase()}). ${onda}`
+      : `Hoje tá fraco: o melhor é ${m.s.pico.nome} das ${m.j.ini}h às ${m.j.fim}h, nota ${num(m.j.nota)}. ${onda} Bom dia pro longboard ou pra descansar.`;
+    lista.push({ quando, titulo, texto });
+  }
+  // a previsão guardada acabou: lembrete pra abrir o app e voltar a receber o boletim
+  if (ultimo >= 0 && ultimo + 1 < S.dias.length) {
+    lista.push({ quando: quandoNoDia(ultimo + 1, off), titulo: comApelido('Bom dia'), texto: 'Abre o Pico Certo pra atualizar a previsão e voltar a receber o boletim do melhor pico do dia.' });
+  }
+  return lista;
+}
+
 function agendarAlertas() {
   if (!NATIVO || typeof NATIVO.agendarAlertas !== 'function' || !S.series) return;
-  try { NATIVO.agendarAlertas(JSON.stringify(S.alertas.ativo ? montarAlertas() : [])); } catch { /* versão antiga do app */ }
+  const lista = (S.alertas.ativo ? montarAlertas() : []).concat(S.boletim.ativo ? montarBoletins() : []);
+  try { NATIVO.agendarAlertas(JSON.stringify(lista)); } catch { /* versão antiga do app */ }
+}
+
+// liga uma notificação (alerta ou boletim): pede permissão se precisar e avisa no parágrafo `msgId`
+function ligarNotificacao(msgId, textoPronto) {
+  const msg = $('#' + msgId);
+  if (typeof NATIVO.pedirNotificacoes === 'function' && !NATIVO.pedirNotificacoes()) {
+    msg.hidden = false;
+    msg.textContent = 'Permita as notificações do Pico Certo na janela que abriu.';
+  } else {
+    msg.hidden = false;
+    msg.textContent = textoPronto;
+  }
+  agendarAlertas();
 }
 
 // ---------- textos ----------
@@ -456,6 +509,8 @@ function rotuloVento(c) {
   const forca = c.ef < 12 ? 'fraco' : c.ef < 22 ? 'moderado' : 'forte';
   return tipo.includes(' ') ? `${tipo}, ${forca}` : `${tipo} ${forca}`;
 }
+// "vento terral fraco" ou "quase sem vento", pra frases corridas
+const textoVento = c => c.ef <= 6 ? 'quase sem vento' : `vento ${rotuloVento(c)}`;
 const rotuloTamanho = m => m < 0.3 ? 'marola' : m < 0.6 ? 'joelho a cintura' : m < 0.9 ? 'cintura a peito'
   : m < 1.3 ? 'peito a cabeça' : m < 1.8 ? 'um pouco acima da cabeça' : m < 2.5 ? '1,5× a 2× a cabeça' : 'grande, acima de 2× a cabeça';
 const faixaM = m => m < 0.15 ? 'menos de 0,2 m' : `${num(m * 0.8)}–${num(m * 1.15)} m`;
@@ -591,6 +646,8 @@ function render() {
   else if (tipo === 'favoritos') el.innerHTML = telaFavoritos();
   else if (tipo === 'comparar') { el.innerHTML = telaComparar(); atualizarSelecao(); }
   else if (tipo === 'seguranca') el.innerHTML = telaSeguranca();
+  else if (tipo === 'diario') el.innerHTML = telaDiario();
+  else if (tipo === 'diario-novo') el.innerHTML = telaDiarioNovo(arg);
   else el.innerHTML = telaInicio();
 }
 
@@ -808,6 +865,7 @@ function categorias() {
       ${cat('dias', ICONE.dias, 'Melhores dias', metaDias)}
       ${cat('mapa', ICONE.mapa, 'Mapa', 'Notas de hoje no mapa')}
       ${cat('favoritos', ICONE.favoritos, 'Favoritos', S.favoritos.length ? `${S.favoritos.length} ${S.favoritos.length === 1 ? 'pico' : 'picos'}${S.alertas.ativo ? ' · alertas ligados' : ''}` : 'Marque seus picos')}
+      ${cat('diario', ICONE.diario, 'Diário', resumoDiario())}
       ${cat('seguranca', ICONE.seguranca, 'Segurança', 'Emergência e dicas')}
       ${cat('ajustes', ICONE.ajustes, 'Ajustes', `${NIVEIS[S.nivel].nome} · ${S.raio} km`)}
     </div>
@@ -949,7 +1007,7 @@ function textoChamar(s, dIdx) {
   const c = j.melhor.c, cond = condicoesDia(s, diaStr);
   const agua = cond.agua != null ? ` Água ${graus(cond.agua)}.` : '';
   return `Bora? ${p.nome} ${quando} das ${j.ini}h às ${j.fim}h, nota ${num(j.nota)} (${faixa(j.nota).nome.toLowerCase()}). `
-    + `Onda ≈ ${faixaM(c.praia)}, vento ${rotuloVento(c)}.${agua} 🤙\nPrevisão no Pico Certo: ${URL_APP}`;
+    + `Onda ≈ ${faixaM(c.praia)}, ${textoVento(c)}.${agua} 🤙\nPrevisão no Pico Certo: ${URL_APP}`;
 }
 
 function chamarGalera(id, dIdx, msgId) {
@@ -957,6 +1015,143 @@ function chamarGalera(id, dIdx, msgId) {
   if (!s) return;
   const msg = $('#' + msgId);
   compartilharTexto(textoChamar(s, dIdx), t => { if (msg) { msg.hidden = false; msg.textContent = t; } });
+}
+
+// ---------- diário de sessões (fica guardado no celular) ----------
+const TAMANHOS = ['marola', 'joelho', 'cintura', 'peito', 'cabeça', 'acima da cabeça'];
+const CROWDS = ['vazio', 'tranquilo', 'cheio', 'lotado'];
+const MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+
+// Date → 'AAAA-MM-DDTHH:MM' no horário do aparelho
+function horaLocalISO(d) {
+  const z = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${z(d.getMonth() + 1)}-${z(d.getDate())}T${z(d.getHours())}:${z(d.getMinutes())}`;
+}
+function fmtDataSessao(iso) {
+  const [a, m, dia] = iso.slice(0, 10).split('-').map(Number);
+  return `${SEMANA[new Date(a, m - 1, dia).getDay()]} ${dia} ${MESES[m - 1]} · ${iso.slice(11, 16).replace(':', 'h')}`;
+}
+const fmtDuracao = min => min < 60 ? `${min} min` : `${Math.floor(min / 60)}h${min % 60 ? String(min % 60).padStart(2, '0') : ''}`;
+const estrelasTexto = n => '★'.repeat(n) + '☆'.repeat(5 - n);
+
+// o que a previsão dizia na hora em que a sessão começou (só dá pra hoje e dias à frente)
+function previsaoNaHora(s, inicio) {
+  if (!s) return null;
+  const h = s.horas.find(x => x.dia === inicio.slice(0, 10) && x.hora === +inicio.slice(11, 13));
+  return h && h.c ? { nota: +h.c.nota.toFixed(1), praia: +h.c.praia.toFixed(2), vento: rotuloVento(h.c) } : null;
+}
+
+function estatisticasDiario() {
+  const d = S.diario, agora = new Date();
+  const mes = horaLocalISO(agora).slice(0, 7);
+  const cont = {};
+  d.forEach(s => { cont[s.picoNome] = (cont[s.picoNome] || 0) + 1; });
+  const segunda = new Date(agora);
+  segunda.setHours(0, 0, 0, 0);
+  segunda.setDate(segunda.getDate() - ((segunda.getDay() + 6) % 7));
+  const semanas = [];
+  for (let k = 7; k >= 0; k--) {
+    const ini = new Date(segunda); ini.setDate(ini.getDate() - 7 * k);
+    const fim = new Date(ini); fim.setDate(fim.getDate() + 7);
+    semanas.push({ ini, n: d.filter(s => { const t = new Date(s.inicio); return t >= ini && t < fim; }).length });
+  }
+  return {
+    total: d.length,
+    doMes: d.filter(s => s.inicio.startsWith(mes)).length,
+    horas: d.reduce((a, s) => a + s.duracao, 0) / 60,
+    top: Object.entries(cont).sort((a, b) => b[1] - a[1])[0] || null,
+    media: d.length ? d.reduce((a, s) => a + s.nota, 0) / d.length : null,
+    semanas,
+  };
+}
+function resumoDiario() {
+  if (!S.diario.length) return 'Registre suas sessões';
+  const n = estatisticasDiario().doMes;
+  return `${n} ${n === 1 ? 'sessão' : 'sessões'} este mês`;
+}
+
+function graficoSemanasDiario(semanas) {
+  const W = Math.max(260, Math.min(620, window.innerWidth - 62)), H = 118, pl = 6, pr = 6, pt = 18, pb = 22;
+  const n = semanas.length, slot = (W - pl - pr) / n, bw = Math.min(24, slot * 0.55);
+  const max = Math.max(3, ...semanas.map(s => s.n));
+  const y = v => pt + (H - pt - pb) * (1 - v / max);
+  let g = `<line class="base" x1="${pl}" x2="${W - pr}" y1="${y(0)}" y2="${y(0)}"/>`;
+  semanas.forEach((s, i) => {
+    const cx = pl + i * slot + slot / 2, topo = y(s.n);
+    if (s.n) g += `<path class="barra-diario" d="${barPath(cx - bw / 2, topo, bw, y(0) - topo, 4)}"/>`;
+    g += `<text class="eixo" x="${cx}" y="${s.n ? topo - 5 : y(0) - 5}" text-anchor="middle" font-weight="${s.n ? 700 : 400}">${s.n}</text>`;
+    g += `<text class="eixo" x="${cx}" y="${H - 5}" text-anchor="middle">${i === n - 1 ? 'esta' : `${s.ini.getDate()}/${s.ini.getMonth() + 1}`}</text>`;
+  });
+  return `<p class="leve graf-tit">Sessões por semana</p><svg class="graf" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="Sessões por semana nas últimas 8 semanas">${g}</svg>`;
+}
+
+function sessaoHtml(s) {
+  const detalhes = [s.tamanho && `onda ${s.tamanho}`, s.crowd && `crowd ${s.crowd}`, s.prancha && esc(s.prancha)].filter(Boolean).join(' · ');
+  const prev = s.previsto
+    ? `Previsão naquela hora: nota ${num(s.previsto.nota)} (${faixa(s.previsto.nota).nome.toLowerCase()}), onda ≈ ${faixaM(s.previsto.praia)}, vento ${esc(s.previsto.vento)}`
+    : 'Sem previsão guardada pra essa hora';
+  const acoes = S.apagando === s.id
+    ? `<span>Apagar esta sessão?</span><button type="button" class="btn-sec" data-confirmar-apagar="${esc(s.id)}">Apagar</button><button type="button" class="btn-sec" data-cancelar-apagar>Cancelar</button>`
+    : `<button type="button" class="link" data-apagar-sessao="${esc(s.id)}">Apagar</button>`;
+  return `<li class="sessao">
+    <div class="ss-topo">
+      <div class="ln-texto"><strong>${esc(s.picoNome)}</strong><span class="leve">${fmtDataSessao(s.inicio)} · ${fmtDuracao(s.duracao)}</span></div>
+      <span class="ss-nota" role="img" aria-label="${s.nota} de 5 estrelas">${estrelasTexto(s.nota)}</span>
+    </div>
+    ${detalhes ? `<p>${detalhes}</p>` : ''}
+    ${s.obs ? `<p class="ss-obs">${esc(s.obs)}</p>` : ''}
+    <p class="leve">${prev}</p>
+    <div class="ss-acoes">${acoes}</div>
+  </li>`;
+}
+
+function telaDiario() {
+  const e = estatisticasDiario();
+  return cabecalhoTela('Diário', 'Suas sessões, guardadas no seu celular') + `
+    <section class="bloco diario-resumo">
+      <dl class="condicoes">
+        <div><dt>Este mês</dt><dd><strong>${e.doMes}</strong><span>${e.doMes === 1 ? 'sessão' : 'sessões'}</span></dd></div>
+        <div><dt>Na água</dt><dd><strong>${num(e.horas, e.horas % 1 ? 1 : 0)} h</strong><span>em ${e.total} ${e.total === 1 ? 'sessão' : 'sessões'}</span></dd></div>
+        <div><dt>Pico mais surfado</dt><dd><strong>${e.top ? esc(e.top[0]) : '–'}</strong><span>${e.top ? `${e.top[1]} ${e.top[1] === 1 ? 'sessão' : 'sessões'}` : 'registre a primeira'}</span></dd></div>
+        <div><dt>Sua nota média</dt><dd><strong>${e.media != null ? `${num(e.media)} ★` : '–'}</strong><span>de 1 a 5 estrelas</span></dd></div>
+      </dl>
+      ${e.total ? graficoSemanasDiario(e.semanas) : ''}
+    </section>
+    <button type="button" class="btn" data-ir="diario-novo">Registrar sessão</button>
+    ${S.diario.length
+      ? `<ol class="sessoes">${S.diario.map(sessaoHtml).join('')}</ol>`
+      : '<p class="leve">Nenhuma sessão ainda. Depois de surfar, toque em Registrar sessão: o app guarda também o que a previsão dizia, pra você comparar com o que sentiu na água.</p>'}`;
+}
+
+function telaDiarioNovo(picoId) {
+  const agora = new Date(), ini = new Date(agora.getTime() - 2 * 3600 * 1000);
+  ini.setMinutes(0);
+  const iso = horaLocalISO(ini);
+  // favoritos primeiro, depois os mais perto
+  const picos = (S.series || []).map(s => s.pico)
+    .sort((a, b) => (ehFavorito(b.id) - ehFavorito(a.id)) || (distKm(S.loc, a) - distKm(S.loc, b)));
+  const sel = picoId || (S.diario[0] && S.diario[0].picoId) || (picos[0] && picos[0].id);
+  const radios = (nome, lista) => lista.map((t, i) =>
+    `<input type="radio" name="${nome}" id="${nome}-${i}" value="${esc(t)}"><label for="${nome}-${i}">${esc(t)}</label>`).join('');
+  return cabecalhoTela('Registrar sessão') + `<form class="bloco form-sessao" id="form-sessao">
+    <label class="campo" for="ss-pico">Pico<select id="ss-pico">${picos.map(p =>
+      `<option value="${esc(p.id)}"${p.id === sel ? ' selected' : ''}>${esc(p.nome)}${p.nome !== regiaoDe(p).nome ? ` · ${esc(regiaoDe(p).nome)}` : ''}</option>`).join('')}</select></label>
+    <div class="aj-grid">
+      <label class="campo" for="ss-data">Dia<input type="date" id="ss-data" value="${iso.slice(0, 10)}" max="${horaLocalISO(agora).slice(0, 10)}" required></label>
+      <label class="campo" for="ss-hora">Entrou na água às<input type="time" id="ss-hora" value="${iso.slice(11, 16)}" required></label>
+    </div>
+    <label class="campo" for="ss-duracao">Quanto tempo<select id="ss-duracao">${[30, 45, 60, 90, 120, 150, 180, 240].map(m =>
+      `<option value="${m}"${m === 90 ? ' selected' : ''}>${fmtDuracao(m)}</option>`).join('')}</select></label>
+    <fieldset class="estrelas-campo"><legend>Sua nota pra sessão</legend>
+      <div class="estrelas">${[5, 4, 3, 2, 1].map(n =>
+        `<input type="radio" name="ss-nota" id="ss-nota-${n}" value="${n}"${n === 3 ? ' checked' : ''}><label for="ss-nota-${n}" title="${n} de 5">★<span class="sr">${n} de 5</span></label>`).join('')}</div>
+    </fieldset>
+    <fieldset class="chips-campo"><legend>Tamanho da onda</legend><div class="chips">${radios('ss-tamanho', TAMANHOS)}</div></fieldset>
+    <fieldset class="chips-campo"><legend>Crowd</legend><div class="chips">${radios('ss-crowd', CROWDS)}</div></fieldset>
+    <label class="campo" for="ss-prancha">Prancha (opcional)<input id="ss-prancha" maxlength="40" placeholder="Ex.: 6'0 shortboard"></label>
+    <label class="campo" for="ss-obs">Como foi (opcional)<textarea id="ss-obs" rows="3" maxlength="400" placeholder="Ex.: séries boas na maré enchendo, o vento entrou às 10h"></textarea></label>
+    <button type="submit" class="btn">Salvar sessão</button>
+  </form>`;
 }
 
 function telaMapa() {
@@ -1015,6 +1210,16 @@ function telaAjustes() {
         <label class="campo" for="in-kml">Consumo do carro<span><input id="in-kml" type="number" inputmode="decimal" min="3" max="40" step="0.5" value="${S.kmL}"> km/L</span></label>
         <label class="campo" for="in-gas">Preço da gasolina<span>R$ <input id="in-gas" type="number" inputmode="decimal" min="1" max="20" step="0.01" value="${S.gasolina}"></span></label>
       </div>
+    </section>
+    <section class="bloco">
+      <h3 class="secao-tit">Boletim da manhã</h3>
+      ${NATIVO && typeof NATIVO.agendarAlertas === 'function' ? `
+        <label class="interruptor" for="in-boletim"><input type="checkbox" id="in-boletim"${S.boletim.ativo ? ' checked' : ''}><span>Todo dia de manhã, me mandar o melhor pico do dia</span></label>
+        <label class="campo" for="in-boletim-hora">Horário do boletim<select id="in-boletim-hora">${[4, 5, 6, 7, 8].map(v =>
+          `<option value="${v}"${S.boletim.hora === v ? ' selected' : ''}>${v}h</option>`).join('')}</select></label>
+        <p class="leve">${S.favoritos.length ? 'Olha os seus picos favoritos.' : 'Olha o melhor pico perto de você (com favoritos marcados, olha só eles).'} Usa a última previsão baixada: abra o app de vez em quando pra ela ficar em dia.</p>
+        <p class="aviso" id="msg-boletim" hidden></p>`
+      : '<p class="leve">O boletim chega como notificação no app instalado no Android.</p>'}
     </section>
     <section class="bloco">
       <h3 class="secao-tit">Alertas de onda</h3>
@@ -1096,6 +1301,7 @@ function renderDetalhe(completo) {
         <div class="det-acoes">
           <button type="button" class="fav" data-favorito="${esc(p.id)}" aria-pressed="${ehFavorito(p.id)}">${ICONE.estrela}<span>${ehFavorito(p.id) ? 'Favorito' : 'Favoritar'}</span></button>
           <button type="button" class="fav" data-chamar="${esc(p.id)}">${ICONE.chamar}<span>Chamar a galera</span></button>
+          <button type="button" class="fav" data-registrar="${esc(p.id)}">${ICONE.diario}<span>Registrar sessão</span></button>
         </div>
         <p class="aviso" id="msg-chamar-det" hidden></p>
       </header>
@@ -1777,6 +1983,22 @@ document.addEventListener('click', e => {
     chamarGalera(d.chamar, noPico ? S.diaDet : (d.noDia != null ? +d.noDia : S.dia), noPico ? 'msg-chamar-det' : 'msg-chamar-cmp');
   }
   else if ('modoComp' in d) { S.modoComp = d.modoComp; store.set('modoComp', S.modoComp); render(); }
+  else if ('registrar' in d) {
+    // sai do pico direto pro formulário; o voltar leva pra tela de antes do pico
+    fecharDetalhe();
+    S.tela = 'diario-novo:' + d.registrar;
+    try { history.replaceState({ tela: S.tela, n: (history.state && history.state.n) || 0 }, ''); } catch { /* sem histórico */ }
+    render();
+    window.scrollTo(0, 0);
+  }
+  else if ('apagarSessao' in d) { S.apagando = d.apagarSessao; render(); }
+  else if ('cancelarApagar' in d) { S.apagando = null; render(); }
+  else if ('confirmarApagar' in d) {
+    S.diario = S.diario.filter(s => s.id !== d.confirmarApagar);
+    store.set('diario', S.diario);
+    S.apagando = null;
+    render();
+  }
   else if ('diaComp' in d) { S.diaComp = +d.diaComp; render(); }
   else if ('limparSelecao' in d) {
     S.selecionados = []; store.set('selecionados', S.selecionados);
@@ -1825,15 +2047,20 @@ document.addEventListener('change', e => {
   else if (t.id === 'in-alertas') {
     S.alertas = { ...S.alertas, ativo: t.checked };
     store.set('alertas', S.alertas);
-    const msg = $('#msg-alertas');
-    if (t.checked && typeof NATIVO.pedirNotificacoes === 'function' && !NATIVO.pedirNotificacoes()) {
-      msg.hidden = false;
-      msg.textContent = 'Permita as notificações do Pico Certo na janela que abriu.';
-    } else if (t.checked) {
+    if (t.checked) {
       const n = S.series ? montarAlertas().length : 0;
-      msg.hidden = false;
-      msg.textContent = n ? `Pronto! ${n} ${n === 1 ? 'aviso agendado' : 'avisos agendados'} pros próximos dias.` : 'Pronto! Nenhum dia da semana passa da nota escolhida por enquanto. Quando passar, você recebe o aviso.';
-    }
+      ligarNotificacao('msg-alertas', n ? `Pronto! ${n} ${n === 1 ? 'aviso agendado' : 'avisos agendados'} pros próximos dias.` : 'Pronto! Nenhum dia da semana passa da nota escolhida por enquanto. Quando passar, você recebe o aviso.');
+    } else agendarAlertas();
+  }
+  else if (t.id === 'in-boletim') {
+    S.boletim = { ...S.boletim, ativo: t.checked };
+    store.set('boletim', S.boletim);
+    if (t.checked) ligarNotificacao('msg-boletim', `Pronto! O próximo boletim chega às ${S.boletim.hora}h.`);
+    else agendarAlertas();
+  }
+  else if (t.id === 'in-boletim-hora') {
+    S.boletim = { ...S.boletim, hora: +t.value };
+    store.set('boletim', S.boletim);
     agendarAlertas();
   }
   else if (t.id === 'in-alerta-nota' || t.id === 'in-alerta-hora') {
@@ -1851,6 +2078,31 @@ document.addEventListener('change', e => {
     if (!(v > 0)) return;
     if (t.id === 'in-kml') { S.kmL = v; store.set('kmL', v); } else { S.gasolina = v; store.set('gasolina', v); }
   }
+});
+
+// salva uma sessão do diário, junto com o que a previsão dizia naquela hora
+document.addEventListener('submit', e => {
+  if (e.target.id !== 'form-sessao') return;
+  e.preventDefault();
+  const picoId = $('#ss-pico').value;
+  const s = S.series && S.series.find(x => x.pico.id === picoId);
+  const p = s ? s.pico : todosPicos().find(x => x.id === picoId);
+  const marcado = nome => { const r = document.querySelector(`input[name="${nome}"]:checked`); return r ? r.value : null; };
+  const inicio = `${$('#ss-data').value}T${$('#ss-hora').value}`;
+  const sessao = {
+    id: 's' + Date.now().toString(36),
+    picoId, picoNome: p ? p.nome : picoId, regiaoNome: p ? regiaoDe(p).nome : '',
+    inicio, duracao: +$('#ss-duracao').value,
+    nota: +(marcado('ss-nota') || 3), tamanho: marcado('ss-tamanho'), crowd: marcado('ss-crowd'),
+    prancha: $('#ss-prancha').value.trim(), obs: $('#ss-obs').value.trim(),
+    previsto: previsaoNaHora(s, inicio),
+  };
+  S.diario = [sessao].concat(S.diario).sort((a, b) => b.inicio.localeCompare(a.inicio));
+  store.set('diario', S.diario);
+  S.tela = 'diario';
+  try { history.replaceState({ tela: 'diario', n: (history.state && history.state.n) || 0 }, ''); } catch { /* sem histórico */ }
+  render();
+  window.scrollTo(0, 0);
 });
 
 document.addEventListener('submit', e => {
@@ -1917,10 +2169,11 @@ document.addEventListener('click', e => {
 
 // o Android avisa aqui se a pessoa permitiu as notificações
 window.addEventListener('pc-notificacoes', e => {
-  const msg = $('#msg-alertas');
-  if (msg) {
-    msg.hidden = false;
-    msg.textContent = e.detail ? 'Notificações permitidas. Os avisos estão agendados.' : 'Sem permissão de notificação, os alertas não aparecem. Dá pra liberar nas configurações do Android, em Apps › Pico Certo › Notificações.';
+  // atualiza a mensagem de quem pediu (alertas ou boletim)
+  for (const id of ['msg-alertas', 'msg-boletim']) {
+    const msg = $('#' + id);
+    if (!msg || msg.hidden) continue;
+    msg.textContent = e.detail ? 'Notificações permitidas. Está tudo agendado.' : 'Sem permissão de notificação, os avisos não aparecem. Dá pra liberar nas configurações do Android, em Apps › Pico Certo › Notificações.';
   }
   agendarAlertas();
 });

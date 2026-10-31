@@ -276,6 +276,36 @@ tbody tr { cursor: pointer; }
 
 #conteudo, .det-col { display: flex; flex-direction: column; gap: 18px; }
 
+/* diário de sessões */
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.cat-grade .cat:last-child:nth-child(odd) { grid-column: 1 / -1; }
+.fav svg:not(.estrela) { width: 16px; height: 16px; }
+.diario-resumo { display: flex; flex-direction: column; gap: 10px; padding-bottom: 12px; }
+.graf-tit { margin: 4px 0 0; }
+.graf .barra-diario { fill: var(--tide); }
+.sessoes { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.sessao { display: flex; flex-direction: column; gap: 6px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+.sessao p { margin: 0; font-size: 14px; color: var(--ink-2); }
+.sessao .ss-obs { color: var(--ink); font-style: italic; }
+.ss-topo { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+.ss-nota { flex: 0 0 auto; color: var(--alerta-icone); font-size: 17px; letter-spacing: 1px; }
+.ss-acoes { display: flex; align-items: center; justify-content: flex-end; gap: 8px; font-size: 14px; }
+.link { border: 0; background: none; padding: 2px 0; color: var(--muted); font: 500 14px var(--body); text-decoration: underline; text-underline-offset: 2px; }
+.form-sessao { display: flex; flex-direction: column; gap: 14px; padding-bottom: 16px; }
+.form-sessao fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
+.form-sessao legend { padding: 0; margin-bottom: 6px; font-size: 14px; color: var(--ink-2); }
+.form-sessao textarea { font: inherit; font-size: 15px; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 8px; resize: vertical; width: 100%; }
+/* estrelas: a ordem no HTML é 5..1, mostrada 1..5; marcar uma acende ela e as de antes */
+.estrelas { display: inline-flex; flex-direction: row-reverse; justify-content: flex-end; gap: 4px; }
+.estrelas input, .chips input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.estrelas label { font-size: 34px; line-height: 1; color: var(--line); cursor: pointer; }
+.estrelas input:checked ~ label, .estrelas label:hover, .estrelas label:hover ~ label { color: var(--alerta-icone); }
+.estrelas input:focus-visible + label { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chips label { padding: 7px 12px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); font: 500 14px var(--body); cursor: pointer; }
+.chips input:checked + label { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); color: var(--accent-text); }
+.chips input:focus-visible + label { outline: 2px solid var(--accent); outline-offset: 2px; }
+
 /* gráfico da semana */
 .graf-semana { touch-action: pan-y; cursor: crosshair; }
 .graf .noite { fill: var(--wash); }
@@ -523,7 +553,7 @@ button.linha:hover { border-color: var(--muted); }
 </div>
 <div id="detalhe" class="painel" role="dialog" aria-modal="true" aria-label="Detalhes do pico" hidden></div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
-<script src="picos.js?v=202610312044"></script>
-<script src="app.js?v=202610312044"></script>
+<script src="picos.js?v=202610312053"></script>
+<script src="app.js?v=202610312053"></script>
 </body>
 </html>
