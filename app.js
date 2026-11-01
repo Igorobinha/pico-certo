@@ -438,7 +438,7 @@ function montarAlertas() {
     lista.push({
       quando,
       titulo: comApelido('Amanhã vai ter onda'),
-      texto: `${m.s.pico.nome} das ${m.j.ini}h às ${m.j.fim}h, nota ${num(m.j.nota)} (${faixa(m.j.nota).nome.toLowerCase()}). Onda ≈ ${faixaM(c.praia)}, ${textoVento(c)}.`,
+      texto: `${m.s.pico.nome} das ${m.j.ini}h às ${m.j.fim}h, nota ${num(m.j.nota)} (${faixa(m.j.nota).nome.toLowerCase()}).\n${linhasCondicoes(m.s, m.j.melhor)}`,
     });
   }
   return lista;
@@ -464,12 +464,11 @@ function montarBoletins() {
       lista.push({ quando, titulo, texto: 'Hoje nenhum dos seus picos tem janela boa com luz do dia. Dia de descanso!' });
       continue;
     }
-    const c = m.j.melhor.c, f = faixa(m.j.nota);
-    const onda = `Onda ≈ ${faixaM(c.praia)}, ${textoVento(c)}.`;
-    const texto = m.j.nota >= 4.5
-      ? `Hoje o melhor é ${m.s.pico.nome} das ${m.j.ini}h às ${m.j.fim}h, nota ${num(m.j.nota)} (${f.nome.toLowerCase()}). ${onda}`
-      : `Hoje tá fraco: o melhor é ${m.s.pico.nome} das ${m.j.ini}h às ${m.j.fim}h, nota ${num(m.j.nota)}. ${onda} Bom dia pro longboard ou pra descansar.`;
-    lista.push({ quando, titulo, texto });
+    const f = faixa(m.j.nota);
+    const frase = m.j.nota >= 4.5
+      ? `Hoje o melhor é ${m.s.pico.nome} das ${m.j.ini}h às ${m.j.fim}h, nota ${num(m.j.nota)} (${f.nome.toLowerCase()}).`
+      : `Hoje tá fraco: o melhor é ${m.s.pico.nome} das ${m.j.ini}h às ${m.j.fim}h, nota ${num(m.j.nota)}. Bom dia pro longboard ou pra descansar.`;
+    lista.push({ quando, titulo, texto: `${frase}\n${linhasCondicoes(m.s, m.j.melhor)}` });
   }
   // a previsão guardada acabou: lembrete pra abrir o app e voltar a receber o boletim
   if (ultimo >= 0 && ultimo + 1 < S.dias.length) {
@@ -511,6 +510,20 @@ function rotuloVento(c) {
 }
 // "vento terral fraco" ou "quase sem vento", pra frases corridas
 const textoVento = c => c.ef <= 6 ? 'quase sem vento' : `vento ${rotuloVento(c)}`;
+
+// condições da melhor hora, uma por linha, pras notificações (aparecem ao expandir o aviso)
+function linhasCondicoes(s, h) {
+  const c = h.c, o = ondulacao(h), cond = condicoesDia(s, h.dia);
+  const linhas = [
+    `Onda: ${faixaM(c.praia)} (${rotuloTamanho(c.praia)}), ondulação ${dirPT(o.dir)} de ${num(o.per, 0)} s`,
+    `Vento: ${c.ef <= 6 ? 'quase parado' : `${rotuloVento(c)}, ${num(h.vento, 0)} km/h de ${dirPT(h.ventoDir)}`}`,
+  ];
+  const mare = descreverMare(h);
+  const agua = cond.agua != null ? `água ${graus(cond.agua)}, ${roupa(cond.agua).curta}` : null;
+  if (mare || agua) linhas.push([mare && `Maré: ${mare.replace('maré ', '')}`, agua && agua.charAt(0).toUpperCase() + agua.slice(1)].filter(Boolean).join(' · '));
+  if (cond.raios.length) linhas.push(`Atenção: risco de trovoada das ${intervalos(cond.raios)}`);
+  return linhas.join('\n');
+}
 const rotuloTamanho = m => m < 0.3 ? 'marola' : m < 0.6 ? 'joelho a cintura' : m < 0.9 ? 'cintura a peito'
   : m < 1.3 ? 'peito a cabeça' : m < 1.8 ? 'um pouco acima da cabeça' : m < 2.5 ? '1,5× a 2× a cabeça' : 'grande, acima de 2× a cabeça';
 const faixaM = m => m < 0.15 ? 'menos de 0,2 m' : `${num(m * 0.8)}–${num(m * 1.15)} m`;
@@ -1218,7 +1231,9 @@ function telaAjustes() {
         <label class="campo" for="in-boletim-hora">Horário do boletim<select id="in-boletim-hora">${[4, 5, 6, 7, 8].map(v =>
           `<option value="${v}"${S.boletim.hora === v ? ' selected' : ''}>${v}h</option>`).join('')}</select></label>
         <p class="leve">${S.favoritos.length ? 'Olha os seus picos favoritos.' : 'Olha o melhor pico perto de você (com favoritos marcados, olha só eles).'} Usa a última previsão baixada: abra o app de vez em quando pra ela ficar em dia.</p>
-        <p class="aviso" id="msg-boletim" hidden></p>`
+        <p class="aviso" id="msg-boletim" hidden></p>
+        <p class="aj-linha"><span class="leve">Quer ver como chega?</span><button type="button" class="btn-sec" data-testar-notificacao>Testar notificação</button></p>
+        <p class="aviso" id="msg-teste-notif" hidden></p>`
       : '<p class="leve">O boletim chega como notificação no app instalado no Android.</p>'}
     </section>
     <section class="bloco">
@@ -1990,6 +2005,30 @@ document.addEventListener('click', e => {
     try { history.replaceState({ tela: S.tela, n: (history.state && history.state.n) || 0 }, ''); } catch { /* sem histórico */ }
     render();
     window.scrollTo(0, 0);
+  }
+  else if ('testarNotificacao' in d) {
+    // notificação de teste daqui a 5 s, junto com os avisos de verdade (o próximo agendamento já tira ela)
+    const msg = $('#msg-teste-notif');
+    const avisar = t => { msg.hidden = false; msg.textContent = t; };
+    if (typeof NATIVO.pedirNotificacoes === 'function' && !NATIVO.pedirNotificacoes()) {
+      avisar('Permita as notificações do Pico Certo na janela que abriu e toque de novo.');
+      return;
+    }
+    const top = S.rk && S.rk[S.dia] ? S.rk[S.dia].find(r => ehFavorito(r.s.pico.id)) || S.rk[S.dia][0] : null;
+    const nome = top ? top.s.pico.nome : 'Jacaraípe';
+    // condições inventadas de um mar bom, pra ver o formato; o título deixa claro que é teste
+    const teste = {
+      quando: Date.now() + 5000,
+      titulo: `${comApelido('Tá bombando agora')} (teste)`,
+      texto: `${nome} das 6h às 9h, nota 8,6 (muito bom). Corre pra água!\n`
+        + 'Onda: 1,2–1,6 m (peito a cabeça), ondulação SE de 11 s\n'
+        + 'Vento: terral fraco, 8 km/h de O\n'
+        + 'Maré: meia maré, enchendo · Água 25 °C, lycra\n'
+        + 'Esta é só uma notificação de teste.',
+    };
+    const reais = (S.alertas.ativo ? montarAlertas() : []).concat(S.boletim.ativo ? montarBoletins() : []);
+    NATIVO.agendarAlertas(JSON.stringify([teste].concat(reais)));
+    avisar('Pronto! A notificação de teste chega em alguns segundos (às vezes até 1 minuto). Pode bloquear a tela pra ver.');
   }
   else if ('apagarSessao' in d) { S.apagando = d.apagarSessao; render(); }
   else if ('cancelarApagar' in d) { S.apagando = null; render(); }
