@@ -524,8 +524,43 @@ function linhasCondicoes(s, h) {
   if (cond.raios.length) linhas.push(`Atenção: risco de trovoada das ${intervalos(cond.raios)}`);
   return linhas.join('\n');
 }
-const rotuloTamanho = m => m < 0.3 ? 'marola' : m < 0.6 ? 'joelho a cintura' : m < 0.9 ? 'cintura a peito'
-  : m < 1.3 ? 'peito a cabeça' : m < 1.8 ? 'um pouco acima da cabeça' : m < 2.5 ? '1,5× a 2× a cabeça' : 'grande, acima de 2× a cabeça';
+// pelo corpo de um surfista de 1,75 m em pé: joelho ~0,5 m, cintura ~1 m, peito ~1,3 m, cabeça ~1,75 m
+const rotuloTamanho = m => m < 0.3 ? 'marola' : m < 0.55 ? 'canela a joelho' : m < 0.95 ? 'joelho a cintura'
+  : m < 1.3 ? 'cintura a peito' : m < 1.75 ? 'peito a cabeça' : m < 2.6 ? 'acima da cabeça' : 'grande, mais de 1,5× a cabeça';
+
+// a onda desenhada na mesma escala de um surfista de 1,75 m em pé, com a prancha
+function ondaVsSurfista(m) {
+  const W = 340, H = 156, topo = 30, fundo = 22, y0 = H - fundo;
+  const pxM = (y0 - topo) / Math.max(2.1, m * 1.2);  // onda grande: o surfista encolhe pra caber
+  const h = Math.max(m, 0.06) * pxM, ps = 1.75 * pxM;
+  const l = Math.min(Math.max(h, 18), 78);           // largura acompanha a altura, com limites
+  const xS = 44, xC = 214;
+  const p = (x, y) => `${x.toFixed(1)} ${y.toFixed(1)}`;
+  // contorno da onda, em unidades de largura (l) e altura (h) a partir da crista:
+  // sobe a parede côncava, passa por baixo do lábio até a ponta, volta por cima até a crista e desce as costas
+  const q = (u, v) => p(xC + u * l, y0 - v * h);
+  const onda = `M${p(Math.max(92, xC - 2.1 * l), y0)}`
+    + `C${q(-1.3, 0)} ${q(-0.75, 0.05)} ${q(-0.35, 0.5)}`
+    + `C${q(-0.3, 0.72)} ${q(-0.55, 0.8)} ${q(-0.85, 0.62)}`
+    + `C${q(-0.7, 0.92)} ${q(-0.25, 1.02)} ${q(0.15, 1)}`
+    + `C${q(0.8, 1)} ${q(1.15, 0.25)} ${q(1.9, 0)}Z`;
+  // espuma: faixa branca no lábio, da ponta até a crista
+  const espuma = `M${q(-0.85, 0.62)}C${q(-0.7, 0.92)} ${q(-0.25, 1.02)} ${q(0.15, 1)}C${q(-0.2, 0.9)} ${q(-0.55, 0.84)} ${q(-0.85, 0.62)}Z`;
+  const e = ps / 100;  // silhueta desenhada em 100 unidades de altura
+  return `<svg class="onda-svg" viewBox="0 0 ${W} ${H}" role="img" aria-label="Onda de cerca de ${num(m)} metro ao lado de um surfista de 1,75 metro">
+    <rect class="ov-agua" x="0" y="${y0}" width="${W}" height="${fundo}"/>
+    <line class="ov-linha" x1="${xS - 22}" x2="${(xC + 0.15 * l).toFixed(1)}" y1="${(y0 - h).toFixed(1)}" y2="${(y0 - h).toFixed(1)}"/>
+    <path class="ov-onda" d="${onda}"/>
+    <path class="ov-espuma" d="${espuma}"/>
+    <g transform="translate(${xS - 20 * e} ${(y0 - ps).toFixed(1)}) scale(${e.toFixed(3)})">
+      <path class="ov-prancha" d="M46 -6C52 8 53 90 46 104C39 90 40 8 46 -6Z"/>
+      <circle class="ov-surfista" cx="20" cy="9" r="8"/>
+      <path class="ov-surfista" d="M11 20Q20 16 29 20L33 24L35 50L31 51L28 30L27 54L31 100H23L20 64L17 100H9L13 54L12 30L9 51L5 50L7 24Z"/>
+    </g>
+    <text class="ov-ref" x="${xS}" y="${(y0 - ps - 12).toFixed(1)}" text-anchor="middle">1,75 m</text>
+    <text class="ov-rot" x="${(xC + 0.15 * l).toFixed(1)}" y="${(y0 - h - 8).toFixed(1)}" text-anchor="middle">≈ ${num(m)} m</text>
+  </svg>`;
+}
 const faixaM = m => m < 0.15 ? 'menos de 0,2 m' : `${num(m * 0.8)}–${num(m * 1.15)} m`;
 
 // roupa pela temperatura da água (°C): curta pros chips, longa pra explicação
@@ -755,8 +790,9 @@ function comparacao() {
         <div class="nota-media ${f.cls}" role="img" aria-label="Nota ${num(j.nota)} de 10, ${f.nome}"><span class="nm-num">${num(j.nota)}</span><span class="nm-rot">${f.nome}</span></div>
       </div>
       <p class="janela"><span class="jan-hora">${j.ini}h–${j.fim}h</span><span class="veredito">${veredito(j.nota)}</span></p>
+      ${ondaVsSurfista(c.praia)}
       <ul class="resumo">
-        <li><span class="leve">Onda</span> ≈ ${faixaM(c.praia)}</li>
+        <li><span class="leve">Onda</span> ≈ ${faixaM(c.praia)} · ${rotuloTamanho(c.praia)}</li>
         <li><span class="leve">Vento</span> ${rotuloVento(c)}</li>
         ${cond.agua != null ? `<li><span class="leve">Água</span> ${graus(cond.agua)} · ${roupa(cond.agua).curta}</li>` : ''}
       </ul>
@@ -1388,6 +1424,7 @@ function renderPrevisaoDetalhe(s) {
   const cond = condicoesDia(s, diaStr);
   const rp = roupa(cond.agua);
   const quando = S.diaDet === 0 ? 'hoje' : S.diaDet === 1 ? 'amanhã' : 'nesse dia';
+  const horaEscolhida = claras.find(h => h.hora === S.horaSel);
   el.innerHTML = `
     <section class="bloco" aria-labelledby="s-tit">
       <h3 class="secao-tit" id="s-tit">Semana <span class="leve">mar aberto</span></h3>
@@ -1411,6 +1448,12 @@ function renderPrevisaoDetalhe(s) {
       <p class="leitura" id="leitura" aria-live="polite">${leitura(claras.find(h => h.hora === S.horaSel))}</p>
       ${graficoNotas(s, claras, j, largura)}
     </section>
+    ${horaEscolhida ? `<section class="bloco" aria-labelledby="ov-tit">
+      <h3 class="secao-tit" id="ov-tit">Tamanho da onda <span class="leve">${rotuloDia(diaStr, S.diaDet).toLowerCase()}, ${horaEscolhida.hora}h</span></h3>
+      ${ondaVsSurfista(horaEscolhida.c.praia)}
+      <p class="ov-texto"><strong>≈ ${faixaM(horaEscolhida.c.praia)}</strong> · ${rotuloTamanho(horaEscolhida.c.praia)}</p>
+      <p class="leve">Comparada a um surfista de 1,75 m em pé. É uma estimativa a partir do mar aberto. Toque nas barras acima pra ver outras horas.</p>
+    </section>` : ''}
     <section class="bloco" aria-labelledby="m-tit">
       <h3 class="secao-tit" id="m-tit">Maré <span class="leve">estimativa do modelo, em metros</span></h3>
       ${graficoMare(s, hs, largura)}
