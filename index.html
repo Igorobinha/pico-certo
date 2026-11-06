@@ -548,6 +548,47 @@ button.linha:hover { border-color: var(--muted); }
 @media (prefers-reduced-motion: reduce) {
   .onda-anim { animation: none; }
 }
+
+/* melhor horário de um pico */
+.busca-pico input {
+  width: 100%; font: 400 16px var(--body); color: var(--ink); background: var(--surface);
+  border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px;
+}
+.busca-pico input::placeholder { color: var(--muted); }
+.escolher-lista { display: flex; flex-direction: column; gap: 14px; }
+.grupo-atalho { display: flex; flex-direction: column; gap: 6px; }
+.grupo-atalho .grupo-cab strong { font: 700 19px var(--display); text-transform: uppercase; letter-spacing: 0.02em; }
+.tela-cab .eyebrow { margin-top: 4px; }
+.hora-tit { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.hora-tit h2 { min-width: 0; }
+.hora-tit .btn-sec { flex: 0 0 auto; }
+.tela-cab .hora-tit h2 { margin: 0; }
+.hora-cartao { display: flex; flex-direction: column; gap: 8px; padding: 16px; }
+.hc-topo { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+.hc-hora { margin: 0; font: 700 clamp(60px, 19vw, 80px)/0.95 var(--display); font-variant-numeric: tabular-nums; }
+.hc-cerca { display: block; margin-bottom: 4px; font: 500 14px/1.2 var(--body); color: var(--ink-2); }
+.hc-veredito { margin: 0; font: 600 17px/1.3 var(--body); }
+.hora-cartao .sub { margin: 0; font-size: 15px; }
+.hora-cartao .alerta { margin: 4px 0 0; }
+.hora-texto p { margin: 0 0 10px; font-size: 16px; line-height: 1.5; }
+.hora-texto p strong { font-weight: 700; }
+.chips-mare { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip-mare { padding: 8px 12px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); color: var(--ink); font: 500 14px var(--body); }
+.chip-mare[aria-pressed="true"] { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); color: var(--accent-text); font-weight: 600; }
+.hm-nota { margin: 8px 0 6px; }
+#hi-tit + .hm-nota { margin-top: 0; }
+.hora-chips { margin-bottom: 10px; }
+.hm-tit { margin: 14px 0 6px; display: flex; justify-content: space-between; align-items: center; gap: 10px; font: 700 19px/1.1 var(--display); text-transform: uppercase; letter-spacing: 0.02em; }
+.hm-motivo { margin: 0 0 8px; font-size: 15px; color: var(--ink-2); }
+#hora-info .condicoes { margin-top: 12px; }
+.graf-hora .hit { cursor: pointer; }
+.graf .hg-melhor { stroke: var(--ink); stroke-width: 2; stroke-linecap: round; }
+.graf .hg-ver { stroke: var(--muted); stroke-width: 1.5; stroke-dasharray: 3 3; }
+.graf .hg-rot { font: 700 12px var(--body); font-variant-numeric: tabular-nums; paint-order: stroke; stroke: var(--surface); stroke-width: 3px; stroke-linejoin: round; }
+.graf .hg-melhor-rot { fill: var(--ink); }
+.graf .hg-ver-rot { fill: var(--ink-2); }
+.graf-hora .mare-rot { paint-order: stroke; stroke: var(--surface); stroke-width: 3px; stroke-linejoin: round; }
+.legenda .lg-s { display: inline-block; flex: 0 0 auto; width: 12px; height: 10px; border-radius: 3px; margin-left: 8px; background: var(--c); }
 </style>
 </head>
 <body>
@@ -566,7 +607,7 @@ button.linha:hover { border-color: var(--muted); }
 </div>
 <div id="detalhe" class="painel" role="dialog" aria-modal="true" aria-label="Detalhes do pico" hidden></div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
-<script src="picos.js?v=202611041218"></script>
-<script src="app.js?v=202611041218"></script>
+<script src="picos.js?v=202611061049"></script>
+<script src="app.js?v=202611061049"></script>
 </body>
 </html>

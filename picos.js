@@ -46,7 +46,7 @@ window.REGIOES = [
     { id: 'barrote', nome: 'Barrote', lat: -20.1500, lon: -40.1850, facing: 100, aproximado: true },
     { id: 'coral-do-cha', nome: 'Coral do Chá', lat: -20.1570, lon: -40.1870, facing: 100, aproximado: true,
       ficha: { fundo: 'coral' } },
-    { id: 'solemar', nome: 'Solemar', lat: -20.1680, lon: -40.1900, facing: 100, aproximado: true },
+    { id: 'solemar', nome: 'Solemar', lat: -20.1680, lon: -40.1900, facing: 100, aproximado: true, ficha: { mare: 'cheia' } },
     { id: 'pracinha', nome: 'Pracinha', lat: -20.1465, lon: -40.1840, facing: 100, aproximado: true },
     { id: 'amigao', nome: 'Amigão', lat: -20.1535, lon: -40.1860, facing: 100, aproximado: true },
   ] },
