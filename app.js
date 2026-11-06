@@ -1388,7 +1388,7 @@ function textosHorario(s, diaStr, r) {
   let saida = '';
   if (horasViagem >= 0.1) {
     const sai = m.dec - horasViagem;
-    const deOnde = `De ${esc(S.loc.nome)} são ${fmtTempo(horasViagem)} de carro`;
+    const deOnde = `Até lá são ${fmtTempo(horasViagem)} de carro`;
     saida = ehHoje && sai - a.hora < 0.25 ? `${deOnde}: saia agora pra chegar a tempo.` : sai < 0 ? `${deOnde}.` : `${deOnde}: saia por volta das ${fmtHora(sai)}.`;
   }
   const faixaHora = `das ${fmtHora30(r.ini.dec)} às ${fmtHora30(r.fim.dec)}`;
@@ -1420,10 +1420,11 @@ function cartaoHorario(s, diaStr, dIdx, r) {
 
 // a maré do dia desenhada no cartão principal: curva de verdade, de ponta a ponta, com a melhor hora marcada
 function curvaHero(s, diaStr, r, W) {
-  const ms = r.ms, m = r.m, H = 138, pt = 42, pb = 24, base = H - pb;
+  const ms = r.ms, m = r.m, H = 112, pt = 34, pb = 22, base = H - pb, folgaX = 18;
   const t0 = Math.floor(ms[0].dec), t1 = Math.ceil(ms[ms.length - 1].dec + 1 / 6);
-  const x = t => ((t - t0) / (t1 - t0)) * W;
-  const hs = s.horas.filter(h => h.dia === diaStr && h.mare != null && h.hora >= t0 && h.hora <= t1);
+  const x = t => folgaX + ((t - t0) / (t1 - t0)) * (W - 2 * folgaX);
+  // uma hora a mais de cada lado: a curva continua até a borda do cartão, onde o desenho a corta
+  const hs = s.horas.filter(h => h.dia === diaStr && h.mare != null && h.hora >= t0 - 1 && h.hora <= t1 + 1);
   if (hs.length < 2) return '';
   const vals = hs.map(h => h.mare);
   let lo = Math.min(...vals), hi = Math.max(...vals);
@@ -1446,8 +1447,8 @@ function curvaHero(s, diaStr, r, W) {
     g += `<circle class="hc-ponto" cx="${xx.toFixed(1)}" cy="${yy.toFixed(1)}" r="4"/><text class="hc-rot" x="${borda(xx).toFixed(1)}" y="${(yy - 10).toFixed(1)}" text-anchor="${ancora(xx)}">${e.tipo} ${fmtHora10(e.t)}</text>`;
   }
   const xm = x(m.dec), ym = y(m.mare);
-  g += `<line class="hc-marca" x1="${xm.toFixed(1)}" x2="${xm.toFixed(1)}" y1="18" y2="${base}"/>`;
-  g += `<circle class="hc-pulso" cx="${xm.toFixed(1)}" cy="${ym.toFixed(1)}" r="7"/><circle class="hc-melhor" cx="${xm.toFixed(1)}" cy="${ym.toFixed(1)}" r="7"/>`;
+  g += `<line class="hc-marca" x1="${xm.toFixed(1)}" x2="${xm.toFixed(1)}" y1="17" y2="${base}"/>`;
+  g += `<circle class="hc-pulso" cx="${xm.toFixed(1)}" cy="${ym.toFixed(1)}" r="6"/><circle class="hc-melhor" cx="${xm.toFixed(1)}" cy="${ym.toFixed(1)}" r="6"/>`;
   g += `<text class="hc-melhor-rot" x="${borda(xm).toFixed(1)}" y="13" text-anchor="${ancora(xm)}">melhor hora</text>`;
   return `<svg class="hin-svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="Curva da maré do dia, com a melhor hora marcada às ${fmtHora(m.dec)}">${g}</svg>`;
 }
@@ -1460,7 +1461,7 @@ function horarioInicio() {
   const atual = idAtual ? todosPicos().find(p => p.id === idAtual) : null;
   const opcoes = gruposPorRegiao().map(g => `<optgroup label="${esc(g.reg.nome)}">${g.picos.map(p => `<option value="${esc(p.id)}"${atual && p.id === atual.id ? ' selected' : ''}>${esc(p.nome)}</option>`).join('')}</optgroup>`).join('');
   const letras = atual ? atual.nome.length : 0;
-  const tam = letras > 17 ? '30px' : letras > 12 ? '36px' : '46px';  // nome comprido não pode cortar
+  const tam = letras > 17 ? '26px' : letras > 12 ? '30px' : '36px';  // nome comprido não pode cortar
   const abre = corpo => `<section class="hora-inicio" aria-labelledby="hin-tit">
       <div class="hin-topo">
         <h2 class="hin-tit" id="hin-tit">${ICONE.hora}Melhor horário</h2>
@@ -1483,7 +1484,7 @@ function horarioInicio() {
   const m = r.m, f = faixa(m.c.nota), { janelaTxt, saida } = textosHorario(s, diaStr, r);
   const texto = explicarHorario(s, diaStr, dIdx, r);
   const Dia = dIdx === 0 ? 'Hoje' : dIdx === 1 ? 'Amanhã' : rotuloDiaLongo(diaStr, dIdx);
-  const largura = Math.min(664, ($('#conteudo').clientWidth || window.innerWidth - 32) + 16);
+  const largura = Math.min(648, $('#conteudo').clientWidth || window.innerWidth - 32);
   return abre(`${chips}
     <div class="hin-hora">
       <p class="hin-cerca">${Dia}, por volta das</p>
