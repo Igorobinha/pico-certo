@@ -1097,6 +1097,10 @@ function telaEscolherHorario() {
       </div>`;
 }
 
+// cheias e secas pra citar: as do dia, mais a que estiver perto do horário, mesmo de madrugada
+// (senão "maré ainda cheia às 5h50" fica sem a cheia das 3h40 que explica a frase)
+const maresCitadas = (s, m) => s.mares.filter(e => e.dia === m.dia && ((e.t >= 4 && e.t <= 21) || Math.abs(e.pos - m.pos) <= 3.5));
+
 // a maré naquele momento, numa frase
 function mareNoMomento(s, m) {
   if (m.mareNivel == null) return null;
@@ -1132,8 +1136,8 @@ function explicarHorario(s, diaStr, dIdx, r) {
   const partes = [];
 
   // as marés do dia, na mesma ordem de importância pro pico
-  const mares = s.mares.filter(e => e.dia === diaStr && e.t >= 4 && e.t <= 21);
-  const horasDe = tipo => mares.filter(e => e.tipo === tipo).map(e => `das ${fmtHora10(e.t)}`).join(' e ');
+  const mares = maresCitadas(s, m);
+  const horasDe = tipo => mares.filter(e => e.tipo === tipo).map(e => `${e.t < 1.9 ? 'da' : 'das'} ${fmtHora10(e.t)}`).join(' e ');
   const cheias = horasDe('cheia'), secas = horasDe('seca');
   const trechos = [cheias && `a maré cheia é por volta ${cheias}`, secas && `a seca por volta ${secas}`].filter(Boolean);
   if (pref === 'seca' || pref === 'vazia') {
@@ -1269,7 +1273,7 @@ function graficoHorario(s, diaStr, r, ver, W) {
 function gradeHorario(s, m) {
   const c = m.c, o = ondulacao(m), cond = condicoesDia(s, m.dia), rp = roupa(cond.agua);
   const e = exposicao(o.dir, s.pico.facing);
-  const mares = s.mares.filter(x => x.dia === m.dia && x.t >= 4 && x.t <= 21).map(x => `${x.tipo} ${fmtHora10(x.t)}`).join(' · ');
+  const mares = maresCitadas(s, m).map(x => `${x.tipo} ${fmtHora10(x.t)}`).join(' · ');
   const mareTxt = descreverMare(m);
   const itens = [
     ['Ondulação', `${num(o.alt)} m · ${num(o.per, 0)} s`, `de ${dirPT(o.dir)}, ${entradaOnda(e)}`],
