@@ -147,12 +147,19 @@ if (!NIVEIS[S.nivel]) S.nivel = 'intermediario';
   if (Number.isFinite(lat) && Number.isFinite(lon)) S.loc = { lat, lon, nome: qs.get('nome') || 'Local escolhido', fonte: 'url' };
 }
 
+// sem maré publicada pro pico, prevê pela regra geral do fundo: praia de areia costuma abrir melhor na meia
+// maré (na seca a onda fecha, na cheia fica mole); coral e pedra pedem mais água em cima do fundo
+const fundoDuro = p => /coral|pedra|laje/.test((p.ficha && p.ficha.fundo) || '');
+const marePrevista = p => (fundoDuro(p) ? 'meia-cheia' : 'meia');
+
 function todosPicos() {
   const lista = [];
   const comAjustes = p => {
     const c = S.posicoes[p.id], mare = S.maresPico[p.id];
     const q = c ? { ...p, lat: c.lat, lon: c.lon, aproximado: false, corrigido: true } : p;
-    return mare ? { ...q, ficha: { ...q.ficha, mare }, mareMarcada: true } : q;
+    if (mare) return { ...q, ficha: { ...q.ficha, mare }, mareMarcada: true };
+    if (q.ficha && q.ficha.mare) return q;
+    return { ...q, ficha: { ...q.ficha, mare: marePrevista(q) }, marePrevista: true };
   };
   for (const r of REGIOES) for (const p of r.picos) lista.push(comAjustes({ ...p, regiao: r.id }));
   for (const p of S.custom) lista.push(comAjustes({ ...p, regiao: REG_MAP.has(p.regiao) ? p.regiao : MEUS_PICOS.id }));
@@ -369,6 +376,7 @@ function notaHora(h, p, nivel) {
   if (fi.mare && fi.mare !== 'qualquer' && h.mareNivel != null) {
     mareOk = mareCombina(fi.mare, h);
     fMare = fatorMare(fi.mare, h);
+    if (p.marePrevista) fMare = 1 + (fMare - 1) / 2;  // regra geral: pesa metade de uma informação do próprio pico
     fichaF *= fMare;
   }
   if (Array.isArray(fi.ondulacao) && fi.ondulacao.length) {
@@ -396,6 +404,8 @@ function mareCombina(pref, h) {
     case 'cheia': return h.mareNivel >= 0.6;
     case 'seca': case 'vazia': return h.mareNivel <= 0.4;
     case 'meia': return h.mareNivel >= 0.25 && h.mareNivel <= 0.75;
+    case 'meia-cheia': return h.mareNivel >= 0.35;
+    case 'meia-seca': return h.mareNivel <= 0.65;
     case 'enchendo': return h.mareSobe === true;
     case 'vazando': return h.mareSobe === false;
     default: return true;
@@ -410,6 +420,8 @@ function fatorMare(pref, h) {
     case 'cheia': return 0.8 + 0.2 * suave(0.35, 0.8, n);
     case 'seca': case 'vazia': return 0.8 + 0.2 * (1 - suave(0.2, 0.65, n));
     case 'meia': return 0.8 + 0.2 * (1 - suave(0.1, 0.4, Math.abs(n - 0.5)));
+    case 'meia-cheia': return 0.8 + 0.2 * suave(0.1, 0.5, n);
+    case 'meia-seca': return 0.8 + 0.2 * (1 - suave(0.5, 0.9, n));
     case 'enchendo': return h.mareSobe === true ? 1 : 0.8;
     case 'vazando': return h.mareSobe === false ? 1 : 0.8;
     default: return 1;
@@ -1028,8 +1040,8 @@ function atualizarSelecao() {
 const semAcento = t => String(t).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 const fmtHora10 = t => fmtHora(Math.round(t * 6) / 6);
 const fmtHora30 = t => fmtHora(Math.round(t * 2) / 2);
-const NOME_PREF = { cheia: 'de maré cheia', seca: 'de maré seca', vazia: 'de maré seca', meia: 'de meia maré', enchendo: 'com a maré enchendo', vazando: 'com a maré vazando' };
-const OPCOES_MARE = [['cheia', 'Cheia'], ['enchendo', 'Enchendo'], ['meia', 'Meia maré'], ['vazando', 'Vazando'], ['seca', 'Seca'], ['qualquer', 'Qualquer']];
+const NOME_PREF = { cheia: 'de maré cheia', seca: 'de maré seca', vazia: 'de maré seca', meia: 'de meia maré', 'meia-cheia': 'da meia maré pra cheia', 'meia-seca': 'da meia maré pra seca', enchendo: 'com a maré enchendo', vazando: 'com a maré vazando' };
+const OPCOES_MARE = [['cheia', 'Cheia'], ['meia-cheia', 'Meia pra cheia'], ['meia', 'Meia maré'], ['meia-seca', 'Meia pra seca'], ['seca', 'Seca'], ['enchendo', 'Enchendo'], ['vazando', 'Vazando'], ['qualquer', 'Qualquer']];
 
 function escolherPicoHora(id) {
   S.picoHora = id; S.diaHora = null; S.horaVer = null;
@@ -1115,8 +1127,11 @@ function mareNoMomento(s, m) {
   const perto = s.mares.reduce((a, e) => (!a || Math.abs(e.pos - m.pos) < Math.abs(a.pos - m.pos) ? e : a), null);
   if (perto && Math.abs(perto.pos - m.pos) <= 2 / 3) return perto.tipo === 'cheia' ? 'bem na maré cheia' : 'bem na maré seca';
   const n = m.mareNivel, sobe = m.mareSobe;
-  if (n >= 0.66) return sobe ? 'com a maré quase cheia, ainda enchendo' : 'com a maré ainda cheia, começando a vazar';
-  if (n <= 0.33) return sobe ? 'com a maré ainda baixa, começando a encher' : 'com a maré já baixa, ainda vazando';
+  // mesmos limites de mareCombina: o que a conta aceita como a maré do pico, o texto chama pelo mesmo nome
+  const pref = s.pico.ficha && s.pico.ficha.mare;
+  const alta = pref === 'cheia' ? 0.6 : 0.75, baixa = pref === 'seca' || pref === 'vazia' ? 0.4 : 0.25;
+  if (n >= alta) return sobe ? 'com a maré quase cheia, ainda enchendo' : 'com a maré ainda cheia, começando a vazar';
+  if (n <= baixa) return sobe ? 'com a maré ainda baixa, começando a encher' : 'com a maré já baixa, ainda vazando';
   return sobe ? 'na meia maré, enchendo' : 'na meia maré, vazando';
 }
 
@@ -1137,7 +1152,7 @@ function motivoDaDiferenca(m, x, lado) {
 }
 
 // a explicação em texto corrido, feita só com a previsão e com o que se sabe do pico
-function explicarHorario(s, diaStr, dIdx, r, naInicio = false) {
+function explicarHorario(s, diaStr, dIdx, r) {
   const p = s.pico, fi = p.ficha || {}, m = r.m, c = m.c, o = ondulacao(m);
   const nome = esc(p.nome), pref = fi.mare;
   const Quando = dIdx === 0 ? 'Hoje' : dIdx === 1 ? 'Amanhã' : 'Nesse dia', quando = Quando.toLowerCase();
@@ -1158,9 +1173,15 @@ function explicarHorario(s, diaStr, dIdx, r, naInicio = false) {
   // o que se sabe do pico
   const temPref = pref && pref !== 'qualquer' && m.mareNivel != null;
   let txtPico;
-  if (temPref) txtPico = p.mareMarcada ? `Você marcou que ${nome} funciona melhor ${NOME_PREF[pref]}.` : `${nome} costuma funcionar melhor ${NOME_PREF[pref]}.`;
+  if (temPref && p.mareMarcada) txtPico = `Você marcou que ${nome} funciona melhor ${NOME_PREF[pref]}.`;
+  else if (temPref && p.marePrevista) {
+    txtPico = fundoDuro(p) ? `Por ter fundo de ${esc(fi.fundo)}, ${nome} tende a funcionar melhor ${NOME_PREF[pref]}.`
+      : fi.fundo ? `Por ser praia de areia, ${nome} tende a quebrar melhor ${NOME_PREF[pref]}.`
+      : `Como a maioria das praias de areia, ${nome} tende a quebrar melhor ${NOME_PREF[pref]}.`;
+  }
+  else if (temPref) txtPico = `${nome} costuma funcionar melhor ${NOME_PREF[pref]}.`;
   else if (pref === 'qualquer') txtPico = `${nome} funciona em qualquer maré, então quem decide é a onda e o vento.`;
-  else txtPico = `Ainda não sei qual maré ${nome} prefere, então a maré não entrou na conta. Se você conhece o pico, marque ${naInicio ? 'a maré dele em “Ver o dia inteiro”, aqui embaixo' : 'logo abaixo'}.`;
+  else txtPico = '';
   if (Array.isArray(fi.ondulacao) && fi.ondulacao.length && c.ondOk != null) {
     txtPico += ` A ondulação preferida do pico é de ${fi.ondulacao.join(', ')}, e ${quando} ela vem de ${dirPT(o.dir)}${c.ondOk ? ', o que ajuda' : ', fora da preferida'}.`;
   }
@@ -1170,7 +1191,7 @@ function explicarHorario(s, diaStr, dIdx, r, naInicio = false) {
     : c.mareOk === false ? 'Mesmo fora da maré ideal, o melhor momento' : 'Por isso, o melhor momento';
   const fraseMare = mareNoMomento(s, m);
   const txtHora = `${abre} ${quando} é por volta das <strong>${fmtHora(m.dec)}</strong>${fraseMare ? `, ${fraseMare}` : ''}, com onda de ${faixaM(c.praia)} (${rotuloTamanho(c.praia)}), ondulação de ${dirPT(o.dir)} com ${num(o.per, 0)} s e ${textoVento(c)}.`;
-  const principal = `${txtMares} ${txtPico} ${txtHora}`;
+  const principal = [txtMares, txtPico, txtHora].filter(Boolean).join(' ');
 
   // a maré ideal existe nesse dia, mas perdeu por outro motivo: diz por quê
   if (temPref && c.mareOk === false) {
@@ -1460,7 +1481,7 @@ function horarioInicio() {
   if (!r) return abre(`${chips}<p class="hin-sub">Sem previsão pra esse dia.</p>`);
   if (!r.m) return abre(`${chips}<div class="hi-cartao">${cartaoHorario(s, diaStr, dIdx, r)}</div>`);
   const m = r.m, f = faixa(m.c.nota), { janelaTxt, saida } = textosHorario(s, diaStr, r);
-  const texto = explicarHorario(s, diaStr, dIdx, r, true);
+  const texto = explicarHorario(s, diaStr, dIdx, r);
   const Dia = dIdx === 0 ? 'Hoje' : dIdx === 1 ? 'Amanhã' : rotuloDiaLongo(diaStr, dIdx);
   const largura = Math.min(664, ($('#conteudo').clientWidth || window.innerWidth - 32) + 16);
   return abre(`${chips}
@@ -2009,7 +2030,7 @@ function renderDetalhe(completo) {
   }
 }
 
-const NOMES_MARE = { cheia: 'Cheia', seca: 'Seca', vazia: 'Seca', meia: 'Meia maré', enchendo: 'Enchendo', vazando: 'Vazando', qualquer: 'Qualquer' };
+const NOMES_MARE = { cheia: 'Cheia', seca: 'Seca', vazia: 'Seca', meia: 'Meia maré', 'meia-cheia': 'Meia pra cheia', 'meia-seca': 'Meia pra seca', enchendo: 'Enchendo', vazando: 'Vazando', qualquer: 'Qualquer' };
 const NOMES_NIVEL = { iniciante: 'Iniciante', intermediario: 'Intermediário', avancado: 'Avançado', todos: 'Todos' };
 const ORDEM_NIVEL = { iniciante: 0, intermediario: 1, avancado: 2 };
 
@@ -2017,24 +2038,23 @@ function fichaPico(p) {
   const fi = p.ficha || {};
   const itens = [
     fi.fundo && ['Fundo', fi.fundo.charAt(0).toUpperCase() + fi.fundo.slice(1)],
-    fi.mare && ['Melhor maré', (NOMES_MARE[fi.mare] || fi.mare) + (p.mareMarcada ? ' (você marcou)' : '')],
+    fi.mare && ['Melhor maré', (NOMES_MARE[fi.mare] || fi.mare) + (p.mareMarcada ? ' (você marcou)' : p.marePrevista ? ' (previsão)' : '')],
     Array.isArray(fi.ondulacao) && fi.ondulacao.length && ['Melhor ondulação', fi.ondulacao.join(', ')],
     fi.nivel && ['Nível', NOMES_NIVEL[fi.nivel] || fi.nivel],
   ].filter(Boolean);
   const acima = fi.nivel in ORDEM_NIVEL && ORDEM_NIVEL[fi.nivel] > ORDEM_NIVEL[S.nivel];
   const texto = [
     fi.perigos && `<p><strong>Cuidado:</strong> ${esc(fi.perigos)}</p>`,
-    fi.fundo && /coral|pedra/.test(fi.fundo) && !fi.perigos && `<p><strong>Cuidado:</strong> fundo de ${esc(fi.fundo)}. Na maré seca, atenção na hora de cair da onda.</p>`,
+    fi.fundo && /coral|pedra|laje/.test(fi.fundo) && !fi.perigos && `<p><strong>Cuidado:</strong> fundo de ${esc(fi.fundo)}. Na maré seca, atenção na hora de cair da onda.</p>`,
     fi.estrutura && `<p><strong>Estrutura:</strong> ${esc(fi.estrutura)}</p>`,
     fi.dica && `<p><strong>Dica:</strong> ${esc(fi.dica)}</p>`,
   ].filter(Boolean).join('');
-  const vazia = !itens.length && !texto;
   return `<section class="bloco ficha" aria-labelledby="f-tit">
     <h3 class="secao-tit" id="f-tit">Ficha do pico</h3>
     ${acima ? `<p class="alerta" role="note"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2 1 21h22zm-1 7h2v6h-2zm0 8h2v2h-2z"/></svg><span><strong>Pico pra surfista ${NOMES_NIVEL[fi.nivel].toLowerCase()}.</strong> Seu nível nos Ajustes está como ${NOMES_NIVEL[S.nivel].toLowerCase()}.</span></p>` : ''}
     ${itens.length ? `<dl class="condicoes">${itens.map(([k, v]) => `<div><dt>${k}</dt><dd><strong>${esc(v)}</strong></dd></div>`).join('')}</dl>` : ''}
     ${texto}
-    ${vazia ? '<p class="leve">Ficha em construção. Quem conhece o pico pode mandar fundo, melhor maré e ondulação, perigos e estrutura pro Pico Certo.</p>' : ''}
+    ${fi.fonte ? `<p class="leve">Fonte: ${esc(fi.fonte)}</p>` : ''}
   </section>`;
 }
 

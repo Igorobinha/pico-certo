@@ -8,7 +8,9 @@
  *   acesso: [lat, lon] (opcional) = onde estacionar, se for longe do pico. A rota leva até lá.
  *   ficha (opcional) = o que o surfista local sabe do pico. Tudo dentro dela é opcional:
  *     fundo:     'areia' | 'coral' | 'pedra' | 'areia e pedra'
- *     mare:      'cheia' | 'seca' | 'meia' | 'enchendo' | 'vazando' | 'qualquer'   (a nota cai fora dessa maré)
+ *     mare:      'cheia' | 'meia-cheia' | 'meia' | 'meia-seca' | 'seca' | 'enchendo' | 'vazando' | 'qualquer'
+ *                (a nota cai fora dessa maré; sem esse campo, o app prevê pelo fundo e avisa que é previsão)
+ *     fonte:     de onde veio a informação, aparece na ficha
  *     ondulacao: ['S', 'SE']   melhores direções da ondulação: N, NE, L, SE, S, SO, O, NO (a nota cai com as outras)
  *     nivel:     'iniciante' | 'intermediario' | 'avancado'   (o app avisa quem tem nível abaixo)
  *     perigos:   'Pedras no canto esquerdo, corrente forte na vazante'
