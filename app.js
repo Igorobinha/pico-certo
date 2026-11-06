@@ -29,6 +29,7 @@ const ICONE = {
   mapa: '<svg viewBox="0 0 32 32" aria-hidden="true"><path d="M4 8l7-3 10 3 7-3v19l-7 3-10-3-7 3z" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linejoin="round"/><path d="M11 5v19M21 8v19" stroke="currentColor" stroke-width="2.6"/></svg>',
   favoritos: '<svg viewBox="0 0 32 32" aria-hidden="true"><path d="M16 4l3.6 7.6 8.2 1-6 5.7 1.6 8.2L16 22.4l-7.4 4.1 1.6-8.2-6-5.7 8.2-1z" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linejoin="round"/></svg>',
   seguranca: '<svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="11.5" fill="none" stroke="currentColor" stroke-width="2.6"/><circle cx="16" cy="16" r="5" fill="none" stroke="currentColor" stroke-width="2.6"/><path d="M8 8l4.5 4.5M24 8l-4.5 4.5M8 24l4.5-4.5M24 24l-4.5-4.5" stroke="currentColor" stroke-width="2.6"/></svg>',
+  lupa: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="m15.5 15.5 5 5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>',
   hora: '<svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="11.5" fill="none" stroke="currentColor" stroke-width="2.6"/><path d="M16 9v7.5l5 3" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>',
   diario: '<svg viewBox="0 0 32 32" aria-hidden="true"><path d="M8 4h15a3 3 0 0 1 3 3v21H11a3 3 0 0 1-3-3z" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linejoin="round"/><path d="M8 25a3 3 0 0 1 3-3h15M13 10h8M13 15h6" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></svg>',
   chamar: '<svg class="ico-chamar" viewBox="0 0 24 24" aria-hidden="true"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4" fill="none" stroke="currentColor" stroke-width="2"/></svg>',
@@ -870,7 +871,7 @@ function faixaHoras(s, diaStr, j, compacta) {
 }
 
 function telaInicio() {
-  return sugestaoMini() + horarioInicio() + comparacao() + categorias()
+  return horarioInicio() + sugestaoMini() + comparacao() + categorias()
     + `<p class="rodape-mini">Previsão das ${new Date(S.geradoEm).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}${S.offline ? ' (sem internet, mostrando a última)' : ''} · <button type="button" data-atualizar>Atualizar</button></p>`;
 }
 
@@ -1209,6 +1210,16 @@ function explicarHorario(s, diaStr, dIdx, r, naInicio = false) {
   return { antes, principal, depois: partes };
 }
 
+// curva lisa passando pelos pontos (Catmull-Rom)
+function curvaSuave(pts) {
+  let d = `M${pts[0][0].toFixed(1)},${pts[0][1].toFixed(1)}`;
+  for (let i = 0; i < pts.length - 1; i++) {
+    const p0 = pts[i - 1] || pts[i], p1 = pts[i], p2 = pts[i + 1], p3 = pts[i + 2] || p2;
+    d += `C${(p1[0] + (p2[0] - p0[0]) / 6).toFixed(1)},${(p1[1] + (p2[1] - p0[1]) / 6).toFixed(1)} ${(p2[0] - (p3[0] - p1[0]) / 6).toFixed(1)},${(p2[1] - (p3[1] - p1[1]) / 6).toFixed(1)} ${p2[0].toFixed(1)},${p2[1].toFixed(1)}`;
+  }
+  return d;
+}
+
 // maré + nota no mesmo eixo de horas, um painel embaixo do outro (cada um com sua escala).
 // Tocar no gráfico escolhe aquele horário.
 function graficoHorario(s, diaStr, r, ver, W) {
@@ -1228,13 +1239,7 @@ function graficoHorario(s, diaStr, r, ver, W) {
     let lo = Math.min(...vals), hi = Math.max(...vals);
     const folga = Math.max(0.05, (hi - lo) * 0.14); lo -= folga; hi += folga;
     const y = v => pt + h1 - ((v - lo) / (hi - lo)) * h1;
-    // curva lisa passando pelos pontos de cada hora (Catmull-Rom)
-    const pts = hs.map(h => [x(h.hora), y(h.mare)]);
-    let linha = `M${pts[0][0].toFixed(1)},${pts[0][1].toFixed(1)}`;
-    for (let i = 0; i < pts.length - 1; i++) {
-      const p0 = pts[i - 1] || pts[i], p1 = pts[i], p2 = pts[i + 1], p3 = pts[i + 2] || p2;
-      linha += `C${(p1[0] + (p2[0] - p0[0]) / 6).toFixed(1)},${(p1[1] + (p2[1] - p0[1]) / 6).toFixed(1)} ${(p2[0] - (p3[0] - p1[0]) / 6).toFixed(1)},${(p2[1] - (p3[1] - p1[1]) / 6).toFixed(1)} ${p2[0].toFixed(1)},${p2[1].toFixed(1)}`;
-    }
+    const linha = curvaSuave(hs.map(h => [x(h.hora), y(h.mare)]));
     g += `<path class="mare-area" d="${linha}L${x(hs[hs.length - 1].hora).toFixed(1)},${base}L${x(hs[0].hora).toFixed(1)},${base}Z"/>`;
     g += `<path class="mare-linha" d="${linha}"/>`;
     for (const e of s.mares.filter(e => e.dia === diaStr && e.t >= t0 && e.t <= t1)) {
@@ -1356,17 +1361,9 @@ function diaDoHorario(s) {
   return { dIdx, diaStr: S.dias[dIdx], r: dias[dIdx], chips: `<div class="dias-mini" role="group" aria-label="Dia">${botoes}</div>` };
 }
 
-// a hora em destaque, a nota, o veredito, a janela e quando sair de casa
-function cartaoHorario(s, diaStr, dIdx, r) {
-  if (!r.m) {
-    return `<p class="eyebrow" id="hc-tit">${rotuloDiaLongo(diaStr, dIdx)}</p>
-      <p class="hc-veredito">Hoje não dá mais tempo de chegar com luz do dia.</p>
-      <p class="sub">O melhor de hoje foi por volta das ${fmtHora(r.doDia.dec)}, com nota ${num(r.doDia.c.nota)}. Toque em outro dia ali em cima.</p>`;
-  }
-  const m = r.m, f = faixa(m.c.nota), a = agoraLocal(s.off), ehHoje = a.dia === diaStr;
-  const nomeDia = dIdx === 0 ? 'de hoje' : dIdx === 1 ? 'de amanhã' : `de ${rotuloDiaLongo(diaStr, dIdx).toLowerCase()}`;
-  const quando = dIdx === 0 ? 'hoje' : dIdx === 1 ? 'amanhã' : 'nesse dia';
-  const horasViagem = s.viagem.horas;
+// "bom das tantas às tantas" e "saia por volta das tantas"
+function textosHorario(s, diaStr, r) {
+  const m = r.m, a = agoraLocal(s.off), ehHoje = a.dia === diaStr, horasViagem = s.viagem.horas;
   let saida = '';
   if (horasViagem >= 0.1) {
     const sai = m.dec - horasViagem;
@@ -1375,6 +1372,20 @@ function cartaoHorario(s, diaStr, dIdx, r) {
   }
   const faixaHora = `das ${fmtHora30(r.ini.dec)} às ${fmtHora30(r.fim.dec)}`;
   const janelaTxt = r.fim.dec - r.ini.dec < 0.5 ? '' : m.c.nota >= 4.5 ? `Bom mais ou menos ${faixaHora}.` : `O mar fica parecido ${faixaHora}.`;
+  return { janelaTxt, saida };
+}
+
+// a hora em destaque, a nota, o veredito, a janela e quando sair de casa
+function cartaoHorario(s, diaStr, dIdx, r) {
+  if (!r.m) {
+    return `<p class="eyebrow" id="hc-tit">${rotuloDiaLongo(diaStr, dIdx)}</p>
+      <p class="hc-veredito">Hoje não dá mais tempo de chegar com luz do dia.</p>
+      <p class="sub">O melhor de hoje foi por volta das ${fmtHora(r.doDia.dec)}, com nota ${num(r.doDia.c.nota)}. Toque em outro dia ali em cima.</p>`;
+  }
+  const m = r.m, f = faixa(m.c.nota);
+  const nomeDia = dIdx === 0 ? 'de hoje' : dIdx === 1 ? 'de amanhã' : `de ${rotuloDiaLongo(diaStr, dIdx).toLowerCase()}`;
+  const quando = dIdx === 0 ? 'hoje' : dIdx === 1 ? 'amanhã' : 'nesse dia';
+  const { janelaTxt, saida } = textosHorario(s, diaStr, r);
   return `<p class="eyebrow" id="hc-tit">Melhor horário ${nomeDia}</p>
     <div class="hc-topo">
       <p class="hc-hora"><span class="hc-cerca">por volta das</span>${fmtHora(m.dec)}</p>
@@ -1386,33 +1397,92 @@ function cartaoHorario(s, diaStr, dIdx, r) {
     ${alertaRaio(condicoesDia(s, diaStr), quando)}`;
 }
 
-// na tela inicial: escolhe o pico ali mesmo e vê o horário e o motivo, sem abrir outra tela
+// a maré do dia desenhada no cartão principal: curva de verdade, de ponta a ponta, com a melhor hora marcada
+function curvaHero(s, diaStr, r, W) {
+  const ms = r.ms, m = r.m, H = 138, pt = 42, pb = 24, base = H - pb;
+  const t0 = Math.floor(ms[0].dec), t1 = Math.ceil(ms[ms.length - 1].dec + 1 / 6);
+  const x = t => ((t - t0) / (t1 - t0)) * W;
+  const hs = s.horas.filter(h => h.dia === diaStr && h.mare != null && h.hora >= t0 && h.hora <= t1);
+  if (hs.length < 2) return '';
+  const vals = hs.map(h => h.mare);
+  let lo = Math.min(...vals), hi = Math.max(...vals);
+  const folga = Math.max(0.05, (hi - lo) * 0.12); lo -= folga; hi += folga;
+  const y = v => pt + (base - pt) * (1 - (v - lo) / (hi - lo));
+  const d = curvaSuave(hs.map(h => [x(h.hora), y(h.mare)]));
+  const ancora = xx => (xx < 46 ? 'start' : xx > W - 46 ? 'end' : 'middle');
+  const borda = xx => clamp(xx, 10, W - 10);
+  let g = `<rect class="hc-janela" x="${x(r.ini.dec).toFixed(1)}" y="0" width="${(x(r.fim.dec) - x(r.ini.dec)).toFixed(1)}" height="${base}"/>`;
+  g += `<path class="hc-area" d="${d}L${x(hs[hs.length - 1].hora).toFixed(1)},${base}L${x(hs[0].hora).toFixed(1)},${base}Z"/><path class="hc-linha" d="${d}"/>`;
+  const a = agoraLocal(s.off), temAgora = a.dia === diaStr && a.hora >= t0 && a.hora <= t1, xa = temAgora ? x(a.hora) : -99;
+  if (temAgora) g += `<line class="hc-agora" x1="${xa.toFixed(1)}" x2="${xa.toFixed(1)}" y1="${pt}" y2="${base}"/><text class="hc-eixo hc-agora-rot" x="${borda(xa).toFixed(1)}" y="${H - 7}" text-anchor="${ancora(xa)}">agora</text>`;
+  for (let t = Math.ceil(t0 / 3) * 3; t <= t1; t += 3) {
+    const xt = x(t);
+    if (Math.abs(xt - xa) < 30) continue;  // o "agora" fica na mesma linha das horas
+    g += `<text class="hc-eixo" x="${borda(xt).toFixed(1)}" y="${H - 7}" text-anchor="${ancora(xt)}">${t}h</text>`;
+  }
+  for (const e of s.mares.filter(e => e.dia === diaStr && e.t >= t0 && e.t <= t1)) {
+    const xx = x(e.t), yy = y(e.alt);
+    g += `<circle class="hc-ponto" cx="${xx.toFixed(1)}" cy="${yy.toFixed(1)}" r="4"/><text class="hc-rot" x="${borda(xx).toFixed(1)}" y="${(yy - 10).toFixed(1)}" text-anchor="${ancora(xx)}">${e.tipo} ${fmtHora10(e.t)}</text>`;
+  }
+  const xm = x(m.dec), ym = y(m.mare);
+  g += `<line class="hc-marca" x1="${xm.toFixed(1)}" x2="${xm.toFixed(1)}" y1="18" y2="${base}"/>`;
+  g += `<circle class="hc-pulso" cx="${xm.toFixed(1)}" cy="${ym.toFixed(1)}" r="7"/><circle class="hc-melhor" cx="${xm.toFixed(1)}" cy="${ym.toFixed(1)}" r="7"/>`;
+  g += `<text class="hc-melhor-rot" x="${borda(xm).toFixed(1)}" y="13" text-anchor="${ancora(xm)}">melhor hora</text>`;
+  return `<svg class="hin-svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="Curva da maré do dia, com a melhor hora marcada às ${fmtHora(m.dec)}">${g}</svg>`;
+}
+
+// a parte principal da tela inicial: escolhe o pico ali mesmo e vê a hora certa, em grande, e o motivo
 function horarioInicio() {
-  const atual = S.picoHora ? todosPicos().find(p => p.id === S.picoHora) : null;
+  // sem pico escolhido ainda, começa pelo melhor perto da pessoa: o destaque nunca abre vazio
+  const sugerido = S.rk[S.dia] && S.rk[S.dia][0] ? S.rk[S.dia][0].s.pico.id : null;
+  const idAtual = S.picoHora || sugerido;
+  const atual = idAtual ? todosPicos().find(p => p.id === idAtual) : null;
   const opcoes = gruposPorRegiao().map(g => `<optgroup label="${esc(g.reg.nome)}">${g.picos.map(p => `<option value="${esc(p.id)}"${atual && p.id === atual.id ? ' selected' : ''}>${esc(p.nome)}</option>`).join('')}</optgroup>`).join('');
-  const abre = corpo => `<section class="bloco hora-inicio" aria-labelledby="hin-tit">
-      <h2 class="secao-tit" id="hin-tit">Melhor horário</h2>
-      <div class="hi-escolha">
-        <label class="sr" for="sel-pico-hora">Escolher pico</label>
-        <select id="sel-pico-hora">${atual ? '' : '<option value="" selected>Escolha um pico…</option>'}${opcoes}</select>
-        <button type="button" class="btn-sec" data-ir="horario">Buscar</button>
+  const letras = atual ? atual.nome.length : 0;
+  const tam = letras > 17 ? '30px' : letras > 12 ? '36px' : '46px';  // nome comprido não pode cortar
+  const abre = corpo => `<section class="hora-inicio" aria-labelledby="hin-tit">
+      <div class="hin-topo">
+        <h2 class="hin-tit" id="hin-tit">${ICONE.hora}Melhor horário</h2>
+        <button type="button" class="hin-buscar" data-ir="horario">${ICONE.lupa}Buscar</button>
       </div>
+      <div class="hin-pico" style="--tam:${tam}">
+        <label class="sr" for="sel-pico-hora">Escolher pico</label>
+        <select id="sel-pico-hora">${atual ? '' : '<option value="" selected>Escolha um pico</option>'}${opcoes}</select>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5.4 8.6 4 10l8 8 8-8-1.4-1.4-6.6 6.6z"/></svg>
+      </div>
+      ${atual ? `<p class="hin-local">${esc(localPico(atual))}</p>` : ''}
       ${corpo}
     </section>`;
-  if (!atual) return abre('<p class="leve">Escolha um pico e veja a melhor hora de cair, com o motivo.</p>');
+  if (!atual) return abre('<p class="hin-sub">Escolha um pico e veja a melhor hora de cair, com o motivo.</p>');
   const s = S.series.find(x => x.pico.id === atual.id);
-  if (!s) return abre(`<p class="leve" aria-live="polite">${S.carregando ? `Baixando a previsão de ${esc(atual.nome)}…` : 'Sem previsão desse pico agora. Toque em Atualizar, lá embaixo.'}</p>`);
+  if (!s) return abre(`<p class="hin-sub" aria-live="polite">${S.carregando ? `Baixando a previsão de ${esc(atual.nome)}…` : 'Sem previsão desse pico agora. Toque em Atualizar, lá embaixo.'}</p>`);
   const { dIdx, diaStr, r, chips } = diaDoHorario(s);
-  if (!r) return abre(`${chips}<p class="leve">Sem previsão pra esse dia.</p>`);
-  const cartao = `<div class="hi-cartao">${cartaoHorario(s, diaStr, dIdx, r)}</div>`;
-  if (!r.m) return abre(chips + cartao);
+  if (!r) return abre(`${chips}<p class="hin-sub">Sem previsão pra esse dia.</p>`);
+  if (!r.m) return abre(`${chips}<div class="hi-cartao">${cartaoHorario(s, diaStr, dIdx, r)}</div>`);
+  const m = r.m, f = faixa(m.c.nota), { janelaTxt, saida } = textosHorario(s, diaStr, r);
   const texto = explicarHorario(s, diaStr, dIdx, r, true);
-  return abre(`${chips}${cartao}
+  const Dia = dIdx === 0 ? 'Hoje' : dIdx === 1 ? 'Amanhã' : rotuloDiaLongo(diaStr, dIdx);
+  const largura = Math.min(664, ($('#conteudo').clientWidth || window.innerWidth - 32) + 16);
+  return abre(`${chips}
+    <div class="hin-hora">
+      <p class="hin-cerca">${Dia}, por volta das</p>
+      <p class="hin-grande">${fmtHora(m.dec)}</p>
+    </div>
+    <div class="hin-nota">
+      <div class="nota-media ${f.cls}" role="img" aria-label="Nota ${num(m.c.nota)} de 10, ${f.nome}"><span class="nm-num">${num(m.c.nota)}</span><span class="nm-rot">${f.nome}</span></div>
+      <div class="hin-nota-txt">
+        <p class="hin-veredito">${veredito(m.c.nota)}</p>
+        ${janelaTxt ? `<p class="hin-sub">${janelaTxt}</p>` : ''}
+      </div>
+    </div>
+    ${saida ? `<p class="hin-sub">${saida}</p>` : ''}
+    ${alertaRaio(condicoesDia(s, diaStr), dIdx === 0 ? 'hoje' : dIdx === 1 ? 'amanhã' : 'nesse dia')}
+    <button type="button" class="hin-curva" data-ir="horario:${esc(atual.id)}" aria-label="Ver o dia inteiro">${curvaHero(s, diaStr, r, largura)}</button>
     <div class="hora-texto">
       ${paragrafos([...texto.antes, texto.principal])}
       ${texto.depois.length ? `<details class="hi-mais"><summary>Ler mais</summary>${paragrafos(texto.depois)}</details>` : ''}
     </div>
-    <button type="button" class="btn" data-ir="horario:${esc(atual.id)}">Ver o dia inteiro</button>`);
+    <button type="button" class="btn hin-btn" data-ir="horario:${esc(atual.id)}">Ver o dia inteiro</button>`);
 }
 
 function telaHorario(id) {
