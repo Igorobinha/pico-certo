@@ -149,7 +149,7 @@ if (!NIVEIS[S.nivel]) S.nivel = 'intermediario';
 
 // sem maré publicada pro pico, prevê pela regra geral do fundo: praia de areia costuma abrir melhor na meia
 // maré (na seca a onda fecha, na cheia fica mole); coral e pedra pedem mais água em cima do fundo
-const fundoDuro = p => /coral|pedra|laje/.test((p.ficha && p.ficha.fundo) || '');
+const fundoDuro = p => /coral|pedra|laje|recife/.test((p.ficha && p.ficha.fundo) || '');
 const marePrevista = p => (fundoDuro(p) ? 'meia-cheia' : 'meia');
 
 function todosPicos() {
@@ -2045,7 +2045,7 @@ function fichaPico(p) {
   const acima = fi.nivel in ORDEM_NIVEL && ORDEM_NIVEL[fi.nivel] > ORDEM_NIVEL[S.nivel];
   const texto = [
     fi.perigos && `<p><strong>Cuidado:</strong> ${esc(fi.perigos)}</p>`,
-    fi.fundo && /coral|pedra|laje/.test(fi.fundo) && !fi.perigos && `<p><strong>Cuidado:</strong> fundo de ${esc(fi.fundo)}. Na maré seca, atenção na hora de cair da onda.</p>`,
+    fi.fundo && /coral|pedra|laje|recife/.test(fi.fundo) && !fi.perigos && `<p><strong>Cuidado:</strong> fundo de ${esc(fi.fundo)}. Na maré seca, atenção na hora de cair da onda.</p>`,
     fi.estrutura && `<p><strong>Estrutura:</strong> ${esc(fi.estrutura)}</p>`,
     fi.dica && `<p><strong>Dica:</strong> ${esc(fi.dica)}</p>`,
   ].filter(Boolean).join('');
