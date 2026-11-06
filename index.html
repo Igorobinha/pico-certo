@@ -589,6 +589,23 @@ button.linha:hover { border-color: var(--muted); }
 .graf .hg-ver-rot { fill: var(--ink-2); }
 .graf-hora .mare-rot { paint-order: stroke; stroke: var(--surface); stroke-width: 3px; stroke-linejoin: round; }
 .legenda .lg-s { display: inline-block; flex: 0 0 auto; width: 12px; height: 10px; border-radius: 3px; margin-left: 8px; background: var(--c); }
+/* melhor horário na tela inicial */
+.hora-inicio { display: flex; flex-direction: column; gap: 12px; padding: 16px; }
+.hora-inicio .secao-tit { margin: 0; }
+.hora-inicio > .leve { margin: 0; }
+.hi-escolha { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
+.hi-escolha select {
+  width: 100%; min-width: 0; font: 600 16px var(--body); color: var(--ink); background: var(--surface-2);
+  border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px;
+}
+.hi-escolha .btn-sec { justify-content: center; }
+.hi-cartao { display: flex; flex-direction: column; gap: 8px; }
+.hi-cartao .hc-hora { font-size: clamp(52px, 16vw, 68px); }
+.hi-cartao .sub { margin: 0; font-size: 15px; }
+.hi-cartao .alerta { margin: 4px 0 0; }
+.hora-inicio .hora-texto p:last-child { margin-bottom: 0; }
+.hi-mais > summary { font: 600 15px var(--body); color: var(--accent-text); padding: 2px 0; }
+.hi-mais[open] > summary { margin-bottom: 8px; }
 </style>
 </head>
 <body>
@@ -607,7 +624,7 @@ button.linha:hover { border-color: var(--muted); }
 </div>
 <div id="detalhe" class="painel" role="dialog" aria-modal="true" aria-label="Detalhes do pico" hidden></div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
-<script src="picos.js?v=202611061056"></script>
-<script src="app.js?v=202611061056"></script>
+<script src="picos.js?v=202611061107"></script>
+<script src="app.js?v=202611061107"></script>
 </body>
 </html>

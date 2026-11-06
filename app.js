@@ -64,6 +64,8 @@ async function getJSON(url, ms = 20000) {
 
 // no instalador Android, a página ganha window.PicoCertoNativo (voz e tela acesa nativas)
 const NATIVO = window.PicoCertoNativo || null;
+// carimbo da publicação, ex.: 202611061056 (vem do ?v= que o publicar.ps1 põe no index.html)
+const VERSAO_APP = ((document.querySelector('script[src*="app.js"]') || {}).src || '').match(/[?&]v=(\d{12})/)?.[1] || null;
 
 // ---------- configuração ----------
 const REGIOES = window.REGIOES || [];
@@ -120,7 +122,7 @@ const S = {
   custom: store.get('custom', []),
   posicoes: store.get('posicoes', {}),   // posições corrigidas na areia: { idDoPico: {lat, lon} }
   maresPico: store.get('maresPico', {}), // maré que a pessoa marcou pra cada pico: { idDoPico: 'cheia' }
-  picoHora: null, diaHora: null, diaHoraAtual: 0, horaVer: null,  // tela "melhor horário"
+  picoHora: store.get('ultimoPicoHora', null), diaHora: null, diaHoraAtual: 0, horaVer: null,  // "melhor horário": fica na tela inicial
   apelido: store.get('apelido', 'maroleiro'),  // como a voz da navegação chama a pessoa
   favoritos: store.get('favoritos', []),       // ids dos picos com estrela
   selecionados: store.get('selecionados', []), // picos marcados pra comparar na tela inicial
@@ -868,7 +870,7 @@ function faixaHoras(s, diaStr, j, compacta) {
 }
 
 function telaInicio() {
-  return sugestaoMini() + comparacao() + categorias()
+  return sugestaoMini() + horarioInicio() + comparacao() + categorias()
     + `<p class="rodape-mini">Previsão das ${new Date(S.geradoEm).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}${S.offline ? ' (sem internet, mostrando a última)' : ''} · <button type="button" data-atualizar>Atualizar</button></p>`;
 }
 
@@ -1055,6 +1057,19 @@ function marcarMarePico(id, val) {
   agendarAlertas();
 }
 
+// todos os picos separados por região, da região mais perto pra mais longe
+function gruposPorRegiao() {
+  const grupos = new Map();
+  for (const p of todosPicos()) {
+    const reg = regiaoDe(p);
+    if (!grupos.has(reg.id)) grupos.set(reg.id, { reg, picos: [], d: Infinity });
+    const g = grupos.get(reg.id);
+    g.picos.push(p);
+    g.d = Math.min(g.d, distKm(S.loc, p));
+  }
+  return [...grupos.values()].sort((a, b) => a.d - b.d);
+}
+
 function telaEscolherHorario() {
   const hoje = new Map(S.rk[0].map(r => [r.s.pico.id, r]));
   const linha = p => {
@@ -1072,15 +1087,7 @@ function telaEscolherHorario() {
       <div class="grupo-cab"><span><strong>Seus picos</strong></span></div>
       <ul class="linhas-chk">${ids.map(id => linha(porId.get(id)).replace(/ data-busca="[^"]*"/, '')).join('')}</ul>
     </section>` : '';
-  const grupos = new Map();
-  for (const p of todos) {
-    const reg = regiaoDe(p);
-    if (!grupos.has(reg.id)) grupos.set(reg.id, { reg, picos: [], d: Infinity });
-    const g = grupos.get(reg.id);
-    g.picos.push(p);
-    g.d = Math.min(g.d, distKm(S.loc, p));
-  }
-  const lista = [...grupos.values()].sort((a, b) => a.d - b.d);
+  const lista = gruposPorRegiao();
   const perto = lista.filter(g => g.d <= S.raio), longe = lista.filter(g => g.d > S.raio);
   const grupoHtml = g => `<section class="grupo-regiao">
       <div class="grupo-cab"><span><strong>${esc(g.reg.nome)}</strong> <span class="leve">${esc(g.reg.cidade)}</span></span></div>
@@ -1129,7 +1136,7 @@ function motivoDaDiferenca(m, x, lado) {
 }
 
 // a explicação em texto corrido, feita só com a previsão e com o que se sabe do pico
-function explicarHorario(s, diaStr, dIdx, r) {
+function explicarHorario(s, diaStr, dIdx, r, naInicio = false) {
   const p = s.pico, fi = p.ficha || {}, m = r.m, c = m.c, o = ondulacao(m);
   const nome = esc(p.nome), pref = fi.mare;
   const Quando = dIdx === 0 ? 'Hoje' : dIdx === 1 ? 'Amanhã' : 'Nesse dia', quando = Quando.toLowerCase();
@@ -1152,7 +1159,7 @@ function explicarHorario(s, diaStr, dIdx, r) {
   let txtPico;
   if (temPref) txtPico = p.mareMarcada ? `Você marcou que ${nome} funciona melhor ${NOME_PREF[pref]}.` : `${nome} costuma funcionar melhor ${NOME_PREF[pref]}.`;
   else if (pref === 'qualquer') txtPico = `${nome} funciona em qualquer maré, então quem decide é a onda e o vento.`;
-  else txtPico = `Ainda não sei qual maré ${nome} prefere, então a maré não entrou na conta. Se você conhece o pico, marque logo abaixo.`;
+  else txtPico = `Ainda não sei qual maré ${nome} prefere, então a maré não entrou na conta. Se você conhece o pico, marque ${naInicio ? 'a maré dele em “Ver o dia inteiro”, aqui embaixo' : 'logo abaixo'}.`;
   if (Array.isArray(fi.ondulacao) && fi.ondulacao.length && c.ondOk != null) {
     txtPico += ` A ondulação preferida do pico é de ${fi.ondulacao.join(', ')}, e ${quando} ela vem de ${dirPT(o.dir)}${c.ondOk ? ', o que ajuda' : ', fora da preferida'}.`;
   }
@@ -1162,7 +1169,7 @@ function explicarHorario(s, diaStr, dIdx, r) {
     : c.mareOk === false ? 'Mesmo fora da maré ideal, o melhor momento' : 'Por isso, o melhor momento';
   const fraseMare = mareNoMomento(s, m);
   const txtHora = `${abre} ${quando} é por volta das <strong>${fmtHora(m.dec)}</strong>${fraseMare ? `, ${fraseMare}` : ''}, com onda de ${faixaM(c.praia)} (${rotuloTamanho(c.praia)}), ondulação de ${dirPT(o.dir)} com ${num(o.per, 0)} s e ${textoVento(c)}.`;
-  partes.push(`${txtMares} ${txtPico} ${txtHora}`);
+  const principal = `${txtMares} ${txtPico} ${txtHora}`;
 
   // a maré ideal existe nesse dia, mas perdeu por outro motivo: diz por quê
   if (temPref && c.mareOk === false) {
@@ -1183,8 +1190,9 @@ function explicarHorario(s, diaStr, dIdx, r) {
   if (lados.length) partes.push(lados.join(' '));
 
   // já passou o melhor do dia
+  const antes = [];
   if (r.doDia.dec < r.chega && r.doDia.c.nota >= c.nota + 0.5) {
-    partes.unshift(`O melhor de hoje já passou: foi por volta das ${fmtHora(r.doDia.dec)}, com nota ${num(r.doDia.c.nota)}. Abaixo está o melhor do que ainda dá tempo de pegar.`);
+    antes.push(`O melhor de hoje já passou: foi por volta das ${fmtHora(r.doDia.dec)}, com nota ${num(r.doDia.c.nota)}. Abaixo está o melhor do que ainda dá tempo de pegar.`);
   }
 
   // mar fraco e dia melhor na semana
@@ -1198,7 +1206,7 @@ function explicarHorario(s, diaStr, dIdx, r) {
     const qual = melhorDia.i === 0 ? 'hoje' : melhorDia.i === 1 ? 'amanhã' : rotuloDiaLongo(melhorDia.d, melhorDia.i).toLowerCase();
     partes.push(`Se puder escolher o dia, ${qual} está melhor: nota ${num(melhorDia.j.nota)}, por volta das ${melhorDia.j.melhor.hora}h.`);
   }
-  return partes.map(t => `<p>${t}</p>`).join('');
+  return { antes, principal, depois: partes };
 }
 
 // maré + nota no mesmo eixo de horas, um painel embaixo do outro (cada um com sua escala).
@@ -1330,6 +1338,83 @@ function blocoMarePico(p) {
   </section>`;
 }
 
+const paragrafos = lista => lista.map(t => `<p>${t}</p>`).join('');
+
+// o dia aberto (hoje, ou amanhã se hoje não der mais tempo) e os botões de dia com a nota de cada um
+function diaDoHorario(s) {
+  const dias = S.dias.map(d => melhorHorario(s, d));
+  let dIdx = S.diaHora;
+  if (dIdx == null) dIdx = dias[0] && dias[0].m ? 0 : 1;
+  dIdx = Math.min(dIdx, S.dias.length - 1);
+  S.diaHoraAtual = dIdx;
+  const botoes = S.dias.map((d, i) => {
+    const m = dias[i] && dias[i].m, f = m ? faixa(m.c.nota) : null;
+    return `<button type="button" class="dia-mini${i === dIdx ? ' sel' : ''}" aria-pressed="${i === dIdx}" data-dia-hora="${i}">
+      <span>${rotuloDia(d, i)}</span><span class="pill pq ${f ? f.cls : 's0'}">${m ? num(m.c.nota) : '–'}</span>
+    </button>`;
+  }).join('');
+  return { dIdx, diaStr: S.dias[dIdx], r: dias[dIdx], chips: `<div class="dias-mini" role="group" aria-label="Dia">${botoes}</div>` };
+}
+
+// a hora em destaque, a nota, o veredito, a janela e quando sair de casa
+function cartaoHorario(s, diaStr, dIdx, r) {
+  if (!r.m) {
+    return `<p class="eyebrow" id="hc-tit">${rotuloDiaLongo(diaStr, dIdx)}</p>
+      <p class="hc-veredito">Hoje não dá mais tempo de chegar com luz do dia.</p>
+      <p class="sub">O melhor de hoje foi por volta das ${fmtHora(r.doDia.dec)}, com nota ${num(r.doDia.c.nota)}. Toque em outro dia ali em cima.</p>`;
+  }
+  const m = r.m, f = faixa(m.c.nota), a = agoraLocal(s.off), ehHoje = a.dia === diaStr;
+  const nomeDia = dIdx === 0 ? 'de hoje' : dIdx === 1 ? 'de amanhã' : `de ${rotuloDiaLongo(diaStr, dIdx).toLowerCase()}`;
+  const quando = dIdx === 0 ? 'hoje' : dIdx === 1 ? 'amanhã' : 'nesse dia';
+  const horasViagem = s.viagem.horas;
+  let saida = '';
+  if (horasViagem >= 0.1) {
+    const sai = m.dec - horasViagem;
+    const deOnde = `De ${esc(S.loc.nome)} são ${fmtTempo(horasViagem)} de carro`;
+    saida = ehHoje && sai - a.hora < 0.25 ? `${deOnde}: saia agora pra chegar a tempo.` : sai < 0 ? `${deOnde}.` : `${deOnde}: saia por volta das ${fmtHora(sai)}.`;
+  }
+  const faixaHora = `das ${fmtHora30(r.ini.dec)} às ${fmtHora30(r.fim.dec)}`;
+  const janelaTxt = r.fim.dec - r.ini.dec < 0.5 ? '' : m.c.nota >= 4.5 ? `Bom mais ou menos ${faixaHora}.` : `O mar fica parecido ${faixaHora}.`;
+  return `<p class="eyebrow" id="hc-tit">Melhor horário ${nomeDia}</p>
+    <div class="hc-topo">
+      <p class="hc-hora"><span class="hc-cerca">por volta das</span>${fmtHora(m.dec)}</p>
+      <div class="nota-media ${f.cls}" role="img" aria-label="Nota ${num(m.c.nota)} de 10, ${f.nome}"><span class="nm-num">${num(m.c.nota)}</span><span class="nm-rot">${f.nome}</span></div>
+    </div>
+    <p class="hc-veredito">${veredito(m.c.nota)}</p>
+    ${janelaTxt ? `<p class="sub">${janelaTxt}</p>` : ''}
+    ${saida ? `<p class="sub">${saida}</p>` : ''}
+    ${alertaRaio(condicoesDia(s, diaStr), quando)}`;
+}
+
+// na tela inicial: escolhe o pico ali mesmo e vê o horário e o motivo, sem abrir outra tela
+function horarioInicio() {
+  const atual = S.picoHora ? todosPicos().find(p => p.id === S.picoHora) : null;
+  const opcoes = gruposPorRegiao().map(g => `<optgroup label="${esc(g.reg.nome)}">${g.picos.map(p => `<option value="${esc(p.id)}"${atual && p.id === atual.id ? ' selected' : ''}>${esc(p.nome)}</option>`).join('')}</optgroup>`).join('');
+  const abre = corpo => `<section class="bloco hora-inicio" aria-labelledby="hin-tit">
+      <h2 class="secao-tit" id="hin-tit">Melhor horário</h2>
+      <div class="hi-escolha">
+        <label class="sr" for="sel-pico-hora">Escolher pico</label>
+        <select id="sel-pico-hora">${atual ? '' : '<option value="" selected>Escolha um pico…</option>'}${opcoes}</select>
+        <button type="button" class="btn-sec" data-ir="horario">Buscar</button>
+      </div>
+      ${corpo}
+    </section>`;
+  if (!atual) return abre('<p class="leve">Escolha um pico e veja a melhor hora de cair, com o motivo.</p>');
+  const s = S.series.find(x => x.pico.id === atual.id);
+  if (!s) return abre(`<p class="leve" aria-live="polite">${S.carregando ? `Baixando a previsão de ${esc(atual.nome)}…` : 'Sem previsão desse pico agora. Toque em Atualizar, lá embaixo.'}</p>`);
+  const { dIdx, diaStr, r, chips } = diaDoHorario(s);
+  if (!r) return abre(`${chips}<p class="leve">Sem previsão pra esse dia.</p>`);
+  const cartao = `<div class="hi-cartao">${cartaoHorario(s, diaStr, dIdx, r)}</div>`;
+  if (!r.m) return abre(chips + cartao);
+  const texto = explicarHorario(s, diaStr, dIdx, r, true);
+  return abre(`${chips}${cartao}
+    <div class="hora-texto">
+      ${paragrafos([...texto.antes, texto.principal])}
+      ${texto.depois.length ? `<details class="hi-mais"><summary>Ler mais</summary>${paragrafos(texto.depois)}</details>` : ''}
+    </div>
+    <button type="button" class="btn" data-ir="horario:${esc(atual.id)}">Ver o dia inteiro</button>`);
+}
+
 function telaHorario(id) {
   const s = S.series.find(x => x.pico.id === id);
   if (!s) {
@@ -1341,65 +1426,27 @@ function telaHorario(id) {
     return cabecalhoTela('Melhor horário', '') + `<p class="aviso">Não achei a previsão desse pico. Volte e escolha de novo.</p>`;
   }
   const p = s.pico;
-  const dias = S.dias.map(d => melhorHorario(s, d));
-  let dIdx = S.diaHora;
-  if (dIdx == null) dIdx = dias[0] && dias[0].m ? 0 : 1;  // hoje não dá mais tempo: já abre em amanhã
-  dIdx = Math.min(dIdx, S.dias.length - 1);
-  S.diaHoraAtual = dIdx;
-  const diaStr = S.dias[dIdx], r = dias[dIdx];
-  const nomeDia = dIdx === 0 ? 'de hoje' : dIdx === 1 ? 'de amanhã' : `de ${rotuloDiaLongo(diaStr, dIdx).toLowerCase()}`;
-  const quando = dIdx === 0 ? 'hoje' : dIdx === 1 ? 'amanhã' : 'nesse dia';
-  const chips = S.dias.map((d, i) => {
-    const m = dias[i] && dias[i].m, f = m ? faixa(m.c.nota) : null;
-    return `<button type="button" class="dia-mini${i === dIdx ? ' sel' : ''}" aria-pressed="${i === dIdx}" data-dia-hora="${i}">
-      <span>${rotuloDia(d, i)}</span><span class="pill pq ${f ? f.cls : 's0'}">${m ? num(m.c.nota) : '–'}</span>
-    </button>`;
-  }).join('');
+  const { dIdx, diaStr, r, chips } = diaDoHorario(s);
   const topo = `<header class="tela-cab">
       <button type="button" class="voltar" data-voltar>${ICONE.voltar}Voltar</button>
       <p class="eyebrow">Melhor horário</p>
       <div class="hora-tit"><h2>${esc(p.nome)}</h2><button type="button" class="btn-sec" data-ir="horario">Trocar pico</button></div>
       <p class="sub">${esc(localPico(p))}</p>
     </header>
-    <div class="dias-mini" role="group" aria-label="Dia">${chips}</div>`;
+    ${chips}`;
   if (!r) return topo + `<p class="aviso">Sem previsão pra esse dia.</p>`;
-  if (!r.m) {
-    return topo + `<section class="bloco hora-cartao">
-        <p class="eyebrow">${rotuloDiaLongo(diaStr, dIdx)}</p>
-        <p class="hc-veredito">Hoje não dá mais tempo de chegar com luz do dia.</p>
-        <p class="sub">O melhor de hoje foi por volta das ${fmtHora(r.doDia.dec)}, com nota ${num(r.doDia.c.nota)}. Toque em outro dia ali em cima.</p>
-      </section>`;
-  }
-  const m = r.m, f = faixa(m.c.nota), a = agoraLocal(s.off), ehHoje = a.dia === diaStr;
-  const horasViagem = s.viagem.horas;
-  let saida = '';
-  if (horasViagem >= 0.1) {
-    const sai = m.dec - horasViagem;
-    const deOnde = `De ${esc(S.loc.nome)} são ${fmtTempo(horasViagem)} de carro`;
-    saida = ehHoje && sai - a.hora < 0.25 ? `${deOnde}: saia agora pra chegar a tempo.` : sai < 0 ? `${deOnde}.` : `${deOnde}: saia por volta das ${fmtHora(sai)}.`;
-  }
-  const faixaHora = `das ${fmtHora30(r.ini.dec)} às ${fmtHora30(r.fim.dec)}`;
-  const janelaTxt = r.fim.dec - r.ini.dec < 0.5 ? '' : m.c.nota >= 4.5 ? `Bom mais ou menos ${faixaHora}.` : `O mar fica parecido ${faixaHora}.`;
+  if (!r.m) return topo + `<section class="bloco hora-cartao">${cartaoHorario(s, diaStr, dIdx, r)}</section>`;
+  const m = r.m, texto = explicarHorario(s, diaStr, dIdx, r);
   const horas = r.ms.filter(q => Number.isInteger(q.dec));
   const botaoHora = (q, rot) => {
     const fq = faixa(q.c.nota), sel = S.horaVer != null ? Math.abs(S.horaVer - q.dec) < 0.01 : q === m;
     return `<button type="button" class="dia-mini${sel ? ' sel' : ''}" aria-pressed="${sel}" data-hora-ver="${q.dec}"><span>${rot}</span><span class="pill pq ${fq.cls}">${num(q.c.nota)}</span></button>`;
   };
   return topo + `
-    <section class="bloco hora-cartao" aria-labelledby="hc-tit">
-      <p class="eyebrow" id="hc-tit">Melhor horário ${nomeDia}</p>
-      <div class="hc-topo">
-        <p class="hc-hora"><span class="hc-cerca">por volta das</span>${fmtHora(m.dec)}</p>
-        <div class="nota-media ${f.cls}" role="img" aria-label="Nota ${num(m.c.nota)} de 10, ${f.nome}"><span class="nm-num">${num(m.c.nota)}</span><span class="nm-rot">${f.nome}</span></div>
-      </div>
-      <p class="hc-veredito">${veredito(m.c.nota)}</p>
-      ${janelaTxt ? `<p class="sub">${janelaTxt}</p>` : ''}
-      ${saida ? `<p class="sub">${saida}</p>` : ''}
-      ${alertaRaio(condicoesDia(s, diaStr), quando)}
-    </section>
+    <section class="bloco hora-cartao" aria-labelledby="hc-tit">${cartaoHorario(s, diaStr, dIdx, r)}</section>
     <section class="bloco hora-texto" aria-labelledby="ht-tit">
       <h3 class="secao-tit" id="ht-tit">Por quê</h3>
-      ${explicarHorario(s, diaStr, dIdx, r)}
+      ${paragrafos([...texto.antes, texto.principal, ...texto.depois])}
     </section>
     ${blocoMarePico(p)}
     <section class="bloco" aria-labelledby="hi-tit">
@@ -1433,7 +1480,6 @@ function categorias() {
   return `<section class="categorias" aria-labelledby="cat-tit">
     <h2 class="secao-tit" id="cat-tit">Categorias</h2>
     <div class="cat-grade">
-      ${cat('horario', ICONE.hora, 'Melhor horário', 'Escolha um pico e veja a hora certa')}
       ${cat('picos', ICONE.picos, 'Picos', `${regs.length} ${regs.length === 1 ? 'região' : 'regiões'} · ${nPicos} picos`)}
       ${cat('dias', ICONE.dias, 'Melhores dias', metaDias)}
       ${cat('mapa', ICONE.mapa, 'Mapa', 'Notas de hoje no mapa')}
@@ -1835,6 +1881,7 @@ function telaAjustes() {
       <h3 class="secao-tit">Sobre os dados</h3>
       <p>Ondas, vento e maré: <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo</a>. Rotas: OSRM. Mapa: © colaboradores do OpenStreetMap.</p>
       <p>A onda na praia é estimada a partir do mar aberto. Bancada, fundo e maré mudam muito o resultado, então confira uma câmera antes de sair.</p>
+      ${VERSAO_APP ? `<p class="leve">Versão do app: ${VERSAO_APP.slice(6, 8)}/${VERSAO_APP.slice(4, 6)}, ${VERSAO_APP.slice(8, 10)}h${VERSAO_APP.slice(10, 12)}</p>` : ''}
     </section>
   </div>`;
 }
@@ -2643,7 +2690,14 @@ document.addEventListener('input', e => {
 
 document.addEventListener('change', e => {
   const t = e.target;
-  if (t.id === 'sel-raio') { S.raio = +t.value; store.set('raio', S.raio); carregar(); }
+  if (t.id === 'sel-pico-hora' && t.value) {
+    S.picoHora = t.value; S.diaHora = null; S.horaVer = null;
+    store.set('ultimoPicoHora', t.value);
+    // pico fora do raio ainda não tem previsão: começa a baixar e a tela mostra o aviso até chegar
+    if (!S.series.some(x => x.pico.id === t.value)) carregar(true);
+    render();
+  }
+  else if (t.id === 'sel-raio') { S.raio = +t.value; store.set('raio', S.raio); carregar(); }
   else if (t.id === 'sel-cidade' && t.value !== '') {
     const c = CIDADES[+t.value];
     definirLocal({ lat: c.lat, lon: c.lon, nome: c.nome, fonte: 'cidade' });
@@ -2814,7 +2868,27 @@ window.addEventListener('resize', () => {
   }, 200);
 });
 
+// o Android traz o app de volta sem recarregar: a página antiga pode ficar dias na memória.
+// Ao abrir e ao voltar pro app, confere se saiu versão nova e, se saiu, abre ela.
+let versaoConferidaEm = 0;
+async function conferirVersaoNova() {
+  if (!VERSAO_APP || !(location.protocol === 'https:' || location.hostname === 'localhost') || Date.now() - versaoConferidaEm < 60000) return;
+  versaoConferidaEm = Date.now();
+  try {
+    const r = await fetch(`index.html?t=${Date.now()}`, { cache: 'no-store' });
+    const nova = ((await r.text()).match(/app\.js\?v=(\d+)/) || [])[1];
+    // não interrompe quem está seguindo a rota nem quem está preenchendo o diário
+    if (!nova || nova <= VERSAO_APP || NAV || S.tela.startsWith('diario-novo')) return;
+    const u = new URL(location.href);
+    u.searchParams.set('t', Date.now());
+    location.replace(u);
+  } catch { /* sem internet: fica na versão que já está aberta */ }
+}
+window.addEventListener('focus', conferirVersaoNova);
+window.addEventListener('pageshow', conferirVersaoNova);
+
 document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') conferirVersaoNova();
   if (document.visibilityState !== 'visible' || !S.series || NAV) return;
   if (Date.now() - S.geradoEm > VALIDADE_CACHE) carregar(true);
   else if (S.tela !== 'mapa') { calcular(); render(); if (S.aberto) renderPrevisaoDetalhe(serieAberta()); }
@@ -2827,4 +2901,5 @@ if (!NATIVO && 'serviceWorker' in navigator && (location.protocol === 'https:' |
 try { history.replaceState({ tela: 'inicio', n: 0 }, ''); } catch { /* sem histórico */ }
 render();
 if (S.loc) carregar();
+conferirVersaoNova();
 })();
